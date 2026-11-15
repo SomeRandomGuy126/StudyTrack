@@ -214,7 +214,13 @@ Deno.serve(async (req) => {
             "Authorization": `Bearer ${provider.key}`,
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ model, messages, temperature, max_tokens: 1600 }),
+          body: JSON.stringify({
+            model,
+            messages,
+            temperature,
+            max_tokens: 1600,
+            ...(body.task === "agent" ? { response_format: { type: "json_object" } } : {}),
+          }),
         });
 
         if (providerRes.ok) {
