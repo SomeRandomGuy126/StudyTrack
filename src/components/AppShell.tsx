@@ -1,0 +1,177 @@
+import { useState } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import { useTheme } from '@/contexts/ThemeContext';
+import {
+  GraduationCap, LayoutDashboard, BookOpen, Clock, RefreshCw, CheckSquare,
+  Calendar, StickyNote, Layers, BarChart3, Bot, Settings, LogOut,
+  Menu, X, Moon, Sun, Search, Sparkles
+} from 'lucide-react';
+import { Dashboard } from '@/pages/Dashboard';
+import { SubjectsPage } from '@/pages/SubjectsPage';
+import { StudyTrackerPage } from '@/pages/StudyTrackerPage';
+import { RevisionCentrePage } from '@/pages/RevisionCentrePage';
+import { TasksPage } from '@/pages/TasksPage';
+import { CalendarPage } from '@/pages/CalendarPage';
+import { NotesPage } from '@/pages/NotesPage';
+import { FlashcardsPage } from '@/pages/FlashcardsPage';
+import { AnalyticsPage } from '@/pages/AnalyticsPage';
+import { SettingsPage } from '@/pages/SettingsPage';
+import { LearningCentrePage } from '@/pages/LearningCentrePage';
+import { AIAssistant } from '@/components/AIAssistant';
+
+type Page =
+  | 'dashboard' | 'learning' | 'subjects' | 'study' | 'revision' | 'tasks'
+  | 'calendar' | 'notes' | 'flashcards' | 'analytics' | 'settings';
+
+const NAV_ITEMS: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
+  { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  { id: 'learning', label: 'Learning Centre', icon: Sparkles },
+  { id: 'subjects', label: 'Subjects', icon: BookOpen },
+  { id: 'study', label: 'Study Tracker', icon: Clock },
+  { id: 'revision', label: 'Revision Centre', icon: RefreshCw },
+  { id: 'tasks', label: 'Tasks', icon: CheckSquare },
+  { id: 'calendar', label: 'Calendar', icon: Calendar },
+  { id: 'notes', label: 'Notes', icon: StickyNote },
+  { id: 'flashcards', label: 'Flashcards', icon: Layers },
+  { id: 'analytics', label: 'Analytics', icon: BarChart3 },
+];
+
+export function AppShell() {
+  const { profile, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
+  const [page, setPage] = useState<Page>('dashboard');
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [search, setSearch] = useState('');
+
+  const navItems = NAV_ITEMS;
+
+  const renderPage = () => {
+    switch (page) {
+      case 'dashboard': return <Dashboard onNavigate={setPage} />;
+      case 'learning': return <LearningCentrePage />;
+      case 'subjects': return <SubjectsPage />;
+      case 'study': return <StudyTrackerPage />;
+      case 'revision': return <RevisionCentrePage />;
+      case 'tasks': return <TasksPage />;
+      case 'calendar': return <CalendarPage />;
+      case 'notes': return <NotesPage />;
+      case 'flashcards': return <FlashcardsPage />;
+      case 'analytics': return <AnalyticsPage />;
+      case 'settings': return <SettingsPage />;
+    }
+  };
+
+  const SidebarContent = () => (
+    <>
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-app">
+        <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center text-white shrink-0">
+          <GraduationCap size={20} />
+        </div>
+        <span className="text-lg font-bold text-primary">StudyTrack</span>
+      </div>
+
+      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+        {navItems.map((item) => (
+          <button
+            key={item.id}
+            onClick={() => {
+              setPage(item.id);
+              setSidebarOpen(false);
+            }}
+            className={`nav-link w-full ${page === item.id ? 'active' : ''}`}
+          >
+            <item.icon size={18} />
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+
+      <div className="px-3 py-3 border-t border-app space-y-1">
+        <button
+          onClick={() => { setPage('settings'); setSidebarOpen(false); }}
+          className={`nav-link w-full ${page === 'settings' ? 'active' : ''}`}
+        >
+          <Settings size={18} />
+          <span>Settings</span>
+        </button>
+        <button onClick={signOut} className="nav-link w-full">
+          <LogOut size={18} />
+          <span>Sign out</span>
+        </button>
+      </div>
+    </>
+  );
+
+  return (
+    <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
+      {/* Desktop sidebar */}
+      <aside className="hidden lg:flex w-64 flex-col surface border-r border-app shrink-0">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile sidebar */}
+      {sidebarOpen && (
+        <div className="lg:hidden fixed inset-0 z-40 flex">
+          <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <aside className="relative w-64 flex flex-col surface border-r border-app animate-slide-in-right">
+            <button
+              onClick={() => setSidebarOpen(false)}
+              className="absolute top-4 right-4 btn-ghost btn !p-1.5 z-10"
+            >
+              <X size={18} />
+            </button>
+            <SidebarContent />
+          </aside>
+        </div>
+      )}
+
+      {/* Main content */}
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Top bar */}
+        <header className="h-16 border-b border-app surface flex items-center gap-4 px-4 lg:px-6 shrink-0">
+          <button onClick={() => setSidebarOpen(true)} className="lg:hidden btn-ghost btn !p-2">
+            <Menu size={20} />
+          </button>
+
+          <div className="flex-1 max-w-md relative">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
+            <input
+              className="input pl-10"
+              placeholder="Search subjects, topics, tasks..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setAiOpen(true)}
+              className="btn btn-primary !px-3"
+              title="Open Study AI"
+            >
+              <Bot size={18} />
+              <span className="hidden sm:inline">Study AI</span>
+            </button>
+            <button onClick={toggleTheme} className="btn-ghost btn !p-2" title="Toggle theme">
+              {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+            </button>
+            <div
+              className="w-9 h-9 rounded-full bg-brand-500 text-white flex items-center justify-center text-sm font-semibold shrink-0"
+              title={profile?.display_name}
+            >
+              {profile?.display_name?.charAt(0).toUpperCase() ?? 'U'}
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto">
+          <div key={page} className="animate-fade-in">{renderPage()}</div>
+        </main>
+      </div>
+
+      {/* AI Assistant drawer */}
+      <AIAssistant open={aiOpen} onClose={() => setAiOpen(false)} />
+    </div>
+  );
+}
