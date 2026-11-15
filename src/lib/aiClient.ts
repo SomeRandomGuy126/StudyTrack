@@ -144,6 +144,45 @@ export async function chatTurn(opts: {
   return text ?? '';
 }
 
+export type AgentAction = {
+  type: string;
+  payload: Record<string, unknown>;
+};
+
+export type AgentTurnResult = {
+  message: string;
+  actions: AgentAction[];
+};
+
+export async function agentTurn(opts: {
+  message: string;
+  history: { role: 'user' | 'assistant'; content: string }[];
+  context?: string;
+}): Promise<AgentTurnResult> {
+  const { text } = await callAi({
+    task: 'agent',
+    messages: [
+      ...opts.history.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
+      { role: 'user', content: opts.message },
+    ],
+    options: opts.context ? { context: opts.context } : undefined,
+  });
+
+  const parsed = extractJson<AgentTurnResult>(text ?? '');
+
+  if (
+    typeof parsed.message !== 'string' ||
+    !Array.isArray(parsed.actions)
+  ) {
+    throw new AiError('The AI returned an invalid action response.');
+  }
+
+  return parsed;
+}
+
 export async function tutorTurn(opts: {
   sessionId: string;
   subject: string;
