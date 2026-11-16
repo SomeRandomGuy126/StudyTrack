@@ -109,10 +109,17 @@ export function AIAssistant({ open, onClose }: Props) {
       // Route explicit topic and subtopic creation requests deterministically.
       // This avoids depending on the model to invent action names or payload fields.
       const bulkRequest = extractBulkCurriculumRequest(userMessage, messages, data.subjects);
-      const subtopicRequest = bulkRequest ? null : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
-      const topicRequest = bulkRequest || subtopicRequest ? null : extractCreateTopicRequest(userMessage, data.subjects);
-      const directRequest = bulkRequest
-        ? { type: 'create_topics_bulk', payload: bulkRequest }
+      const generatedSubtopicsRequest = bulkRequest
+        ? null
+        : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
+      const subtopicRequest = bulkRequest || generatedSubtopicsRequest
+        ? null
+        : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
+      const topicRequest = bulkRequest || generatedSubtopicsRequest || subtopicRequest
+        ? null
+        : extractCreateTopicRequest(userMessage, data.subjects);
+      const directRequest = bulkRequest || generatedSubtopicsRequest
+        ? { type: 'create_topics_bulk', payload: bulkRequest ?? generatedSubtopicsRequest }
         : subtopicRequest
           ? { type: 'create_subtopic', payload: subtopicRequest }
           : topicRequest
@@ -396,6 +403,54 @@ type ActionExecutionResult = {
   success: boolean;
   summary: string;
 };
+
+function extractAqaTopicSubtopicsRequest(
+  message: string,
+  topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
+  subjects: { id: string; name: string }[]
+): { subject_name: string; topics: BulkCurriculumTopic[] } | null {
+  const match = message.trim().match(
+    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:now\\s+)?(?:add|create|generate)\\s+(?:the\\s+)?(?:appropriate|relevant|suitable)?\\s*subtopics\\s+(?:to|under|for)\\s+(?:the\\s+)?topic\\s+(.+?)\\s+(?:in|under|for)\\s+(?:the\\s+)?(?:subject\\s+)?(.+?)(?:\\s+please)?[.!?]*$/i
+  );
+  if (!match) return null;
+
+  const clean = (value: string) =>
+    value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
+  const topicName = clean(match[1]);
+  const subjectName = clean(match[2]);
+  const subject = subjects.find((item) => item.name.trim().toLowerCase() === subjectName.toLowerCase());
+  if (!subject || subject.name.trim().toLowerCase() !== 'biology') return null;
+
+  const parent = topics.find((item) =>
+    !item.parent_id &&
+    item.subject_id === subject.id &&
+    item.name.trim().toLowerCase() === topicName.toLowerCase()
+  );
+  if (!parent) return null;
+
+  // AQA A-level Biology 7402, Topic 1: Biological molecules.
+  // These are specification content areas, not required practicals.
+  const topicOneNames = ['topic 1: biological molecules', 'biological molecules'];
+  if (!topicOneNames.includes(parent.name.trim().toLowerCase())) return null;
+
+  return {
+    subject_name: subject.name,
+    topics: [{
+      name: parent.name,
+      year: 12,
+      subtopics: [
+        'Monomers and polymers',
+        'Carbohydrates',
+        'Lipids',
+        'Proteins',
+        'Nucleic acids (DNA and RNA)',
+        'ATP',
+        'Water',
+        'Inorganic ions',
+      ],
+    }],
+  };
+}
 
 function extractCreateTopicRequest(
   message: string,
