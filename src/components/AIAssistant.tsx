@@ -401,6 +401,23 @@ function extractCreateTopicRequest(
   message: string,
   subjects: { name: string }[]
 ): { name: string; subject_name: string } | null {
+  const clean = (value: string) =>
+    value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
+
+  // Also accept natural phrasing where the subject comes before the topic name:
+  // "Create a topic in Biology called 'Topic 1: Biological molecules'".
+  const subjectFirst = message.trim().match(
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?topic\s+(?:in|under|for|to)\s+(.+?)\s+(?:called|named)\s+(.+?)(?:\s+please)?[.!?]*$/i
+  );
+  if (subjectFirst) {
+    const requestedSubject = clean(subjectFirst[1]);
+    const name = clean(subjectFirst[2]);
+    const subject = subjects.find(
+      (item) => item.name.trim().toLowerCase() === requestedSubject.toLowerCase()
+    );
+    if (name && subject) return { name, subject_name: subject.name };
+  }
+
   const patterns = [
     /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?topic\s+(?:called|named)\s+(.+?)\s+(?:to|in|under|for)\s+(.+?)(?:\s+please)?[.!?]*$/i,
     /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?topic\s+(.+?)\s+(?:to|in|under|for)\s+(.+?)(?:\s+please)?[.!?]*$/i,
@@ -411,8 +428,6 @@ function extractCreateTopicRequest(
     const match = message.trim().match(pattern);
     if (!match) continue;
 
-    const clean = (value: string) =>
-      value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
     const name = clean(match[1]);
     const requestedSubject = clean(match[2]);
     if (!name || !requestedSubject) continue;
