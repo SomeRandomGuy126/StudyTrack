@@ -387,9 +387,9 @@ function extractCreateTopicRequest(
   subjects: { name: string }[]
 ): { name: string; subject_name: string } | null {
   const patterns = [
-    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(?:a\\s+|new\\s+)?topic\\s+(?:called|named)\\s+(.+?)\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
-    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(?:a\\s+|new\\s+)?topic\\s+(.+?)\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
-    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(.+?)\\s+as\\s+a\\s+topic\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?topic\s+(?:called|named)\s+(.+?)\s+(?:to|in|under|for)\s+(.+?)(?:\s+please)?[.!?]*$/i,
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?topic\s+(.+?)\s+(?:to|in|under|for)\s+(.+?)(?:\s+please)?[.!?]*$/i,
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(.+?)\s+as\s+a\s+topic\s+(?:to|in|under|for)\s+(.+?)(?:\s+please)?[.!?]*$/i,
   ];
 
   for (const pattern of patterns) {
@@ -397,7 +397,7 @@ function extractCreateTopicRequest(
     if (!match) continue;
 
     const clean = (value: string) =>
-      value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
+      value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
     const name = clean(match[1]);
     const requestedSubject = clean(match[2]);
     if (!name || !requestedSubject) continue;
