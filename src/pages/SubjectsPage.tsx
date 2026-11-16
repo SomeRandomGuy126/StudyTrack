@@ -255,6 +255,7 @@ export function SubjectsPage() {
         <TopicModal
           topic={showTopicModal.editing ?? null}
           subjectId={selectedSubject.id}
+          teachers={selectedSubject.teachers ?? []}
           parentId={showTopicModal.parentId}
           position={showTopicModal.editing ? showTopicModal.editing.position : (data.topics.filter(t => t.parent_id === showTopicModal.parentId && t.subject_id === selectedSubject.id).length)}
           teacherNames={selectedSubject.teacher_names ?? []}
@@ -349,6 +350,11 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
           <input className="input" value={teacherNames} onChange={(e) => setTeacherNames(e.target.value)} placeholder="e.g. Mrs Smith, Mr Jones" />
           <p className="text-xs text-tertiary mt-1">Separate multiple teachers with commas.</p>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Teachers (optional)</label>
+          <textarea className="input min-h-[72px]" value={teachersText} onChange={(e) => setTeachersText(e.target.value)} placeholder="Add teacher names, separated by commas" />
+          <p className="text-xs text-tertiary mt-1">You can add more than one teacher.</p>
+        </div>
         <div className="flex gap-3 justify-end pt-2">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
@@ -360,9 +366,10 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
   );
 }
 
-function TopicModal({ topic, subjectId, parentId, position, onClose, onSaved }: {
+function TopicModal({ topic, subjectId, teachers, parentId, position, onClose, onSaved }: {
   topic: Topic | null;
   subjectId: string;
+  teachers: string[];
   parentId: string | null;
   position: number;
   teacherNames: string[];
@@ -410,6 +417,14 @@ function TopicModal({ topic, subjectId, parentId, position, onClose, onSaved }: 
           ) : (
             <input className="input" value={teacherName} onChange={(e) => setTeacherName(e.target.value)} placeholder="Enter teacher name (optional)" />
           )}
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Teacher (optional)</label>
+          <select className="input" value={teacherName} onChange={(e) => setTeacherName(e.target.value)}>
+            <option value="">Not specified</option>
+            {teachers.map((teacher) => <option key={teacher} value={teacher}>{teacher}</option>)}
+          </select>
+          {teachers.length === 0 && <p className="text-xs text-tertiary mt-1">Add teachers to this subject first to select one here.</p>}
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={isDifficult} onChange={(e) => setIsDifficult(e.target.checked)} className="rounded accent-brand-500" />
