@@ -585,7 +585,7 @@ async function executeAgentAction(
           ? 'I could not find the subject "' + subjectName + '". No subtopic was added.'
           : 'Please specify which subject contains the parent topic.');
         const { data: parent, error: parentError } = await supabase
-          .from('topics').select('id, name, position').eq('subject_id', subject.id).is('parent_id', null);
+          .from('topics').select('id, name, position').eq('subject_id', subject.id);
         if (parentError) return failed('I could not check the parent topic, so no subtopic was added.');
         const parentTopic = (parent ?? []).find(t => t.name.trim().toLowerCase() === parentName.toLowerCase());
         if (!parentTopic) return failed('I could not find the parent topic "' + parentName + '" in ' + subject.name + '.');
