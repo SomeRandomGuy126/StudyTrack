@@ -118,8 +118,10 @@ export function AIAssistant({ open, onClose }: Props) {
         response = execution.summary;
         if (execution.success) {
           action = execution.summary;
-          await data.refresh();
         }
+        // Refresh every mounted data view even when the topic already existed,
+        // so a previously stale Subjects page catches up as well.
+        await data.refresh();
       } else {
         const context = buildAppContext(data);
         const history = messages
