@@ -106,21 +106,19 @@ export function AIAssistant({ open, onClose }: Props) {
     let action: string | null = null;
 
     try {
-      // Handle clear topic-creation requests directly so they do not depend on
-      // the model inventing the exact action name and payload keys.
-      const topicRequest = extractCreateTopicRequest(userMessage, data.subjects);
-      if (topicRequest) {
-        const execution = await executeAgentAction(
-          { type: 'create_topic', payload: topicRequest },
-          data,
-          user!.id
-        );
+      // Route explicit topic and subtopic creation requests deterministically.
+      // This avoids depending on the model to invent action names or payload fields.
+      const subtopicRequest = extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
+      const topicRequest = subtopicRequest ? null : extractCreateTopicRequest(userMessage, data.subjects);
+      const directRequest = subtopicRequest
+        ? { type: 'create_subtopic', payload: subtopicRequest }
+        : topicRequest
+          ? { type: 'create_topic', payload: topicRequest }
+          : null;
+      if (directRequest) {
+        const execution = await executeAgentAction(directRequest, data, user!.id);
         response = execution.summary;
-        if (execution.success) {
-          action = execution.summary;
-        }
-        // Refresh every mounted data view even when the topic already existed,
-        // so a previously stale Subjects page catches up as well.
+        if (execution.success) action = execution.summary;
         await data.refresh();
       } else {
         const context = buildAppContext(data);
@@ -413,6 +411,38 @@ function extractCreateTopicRequest(
   return null;
 }
 
+function extractCreateSubtopicRequest(
+  message: string,
+  topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
+  subjects: { id: string; name: string }[]
+): { name: string; parent_topic_name: string; subject_name: string } | null {
+  const text = message.trim().replace(/[.!?]+$/, '');
+  const patterns = [
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?subtopic\s+(?:called\s+|named\s+)?(.+?)\s+(?:to|under|inside|within)\s+(?:the\s+)?(?:topic\s+)?(.+?)\s+(?:in|under|for)\s+(.+?)(?:\s+please)?$/i,
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:a\s+|new\s+)?subtopic\s+(?:called\s+|named\s+)?(.+?)\s+(?:to|under|inside|within)\s+(?:the\s+)?(?:topic\s+)?(.+?)(?:\s+please)?$/i,
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(.+?)\s+as\s+a\s+subtopic\s+(?:of|under)\s+(?:the\s+)?(?:topic\s+)?(.+?)(?:\s+in\s+(.+?))?(?:\s+please)?$/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const clean = (value: string) => value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').trim();
+    const name = clean(match[1]);
+    const parentName = clean(match[2]);
+    const requestedSubject = match[3] ? clean(match[3]) : '';
+    if (!name || !parentName) continue;
+    const parentMatches = topics.filter(t => t.name.trim().toLowerCase() === parentName.toLowerCase());
+    const parent = requestedSubject
+      ? parentMatches.find(t => subjects.find(s => s.id === t.subject_id)?.name.toLowerCase() === requestedSubject.toLowerCase())
+      : parentMatches.length === 1 ? parentMatches[0] : null;
+    if (!parent) {
+      return { name, parent_topic_name: parentName, subject_name: requestedSubject };
+    }
+    const subject = subjects.find(s => s.id === parent.subject_id);
+    if (subject) return { name, parent_topic_name: parent.name, subject_name: subject.name };
+  }
+  return null;
+}
+
 async function executeAgentAction(
   action: StudyAgentAction,
   data: ReturnType<typeof useUserData>,
@@ -539,6 +569,41 @@ async function executeAgentAction(
           success: true,
           summary: 'Added "' + created.name + '" to ' + subject.name + '.',
         };
+      }
+      case 'create_subtopic': {
+        const name = getText('name');
+        const parentName = getText('parent_topic_name') || getText('parent_topic');
+        const subjectName = getText('subject_name') || getText('subject');
+        if (!name || !parentName) return failed('A subtopic name and parent topic are required.');
+        const { data: subjectRows, error: subjectError } = await supabase
+          .from('subjects').select('id, name').eq('user_id', userId);
+        if (subjectError) return failed('I could not load your subjects, so no subtopic was added.');
+        const subject = (subjectRows ?? []).find(s =>
+          !subjectName || s.name.trim().toLowerCase() === subjectName.toLowerCase()
+        );
+        if (!subject) return failed(subjectName
+          ? 'I could not find the subject "' + subjectName + '". No subtopic was added.'
+          : 'Please specify which subject contains the parent topic.');
+        const { data: parent, error: parentError } = await supabase
+          .from('topics').select('id, name, position').eq('subject_id', subject.id).is('parent_id', null);
+        if (parentError) return failed('I could not check the parent topic, so no subtopic was added.');
+        const parentTopic = (parent ?? []).find(t => t.name.trim().toLowerCase() === parentName.toLowerCase());
+        if (!parentTopic) return failed('I could not find the parent topic "' + parentName + '" in ' + subject.name + '.');
+        const { data: siblings, error: siblingsError } = await supabase
+          .from('topics').select('id, name, position').eq('subject_id', subject.id).eq('parent_id', parentTopic.id);
+        if (siblingsError) return failed('I could not check existing subtopics, so nothing was added.');
+        if ((siblings ?? []).some(t => t.name.trim().toLowerCase() === name.toLowerCase()))
+          return failed('The subtopic "' + name + '" already exists under ' + parentTopic.name + '.');
+        const position = (siblings ?? []).reduce((max, t) => Math.max(max, Number(t.position ?? -1)), -1) + 1;
+        const { data: created, error } = await supabase.from('topics').insert({
+          subject_id: subject.id, parent_id: parentTopic.id, name,
+          description: getText('description') || null, position, is_difficult: false,
+        }).select('id, name').single();
+        if (error || !created) {
+          console.error('Subtopic creation failed:', error);
+          return failed('I could not save "' + name + '" under ' + parentTopic.name + '. No subtopic was added.');
+        }
+        return { success: true, summary: 'Added subtopic "' + created.name + '" under "' + parentTopic.name + '" in ' + subject.name + '.' };
       }
       case 'create_task': {
         const title = getText('title');
