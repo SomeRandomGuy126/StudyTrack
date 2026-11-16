@@ -17,6 +17,18 @@
     --border-hover: #cbd5e1;
     --accent: #3b82f6;
     --accent-hover: #2563eb;
+    --accent-rgb: 59 130 246;
+    --brand-50-rgb: 239 246 255;
+    --brand-100-rgb: 219 234 254;
+    --brand-200-rgb: 191 219 254;
+    --brand-300-rgb: 147 197 253;
+    --brand-400-rgb: 96 165 250;
+    --brand-500-rgb: 59 130 246;
+    --brand-600-rgb: 37 99 235;
+    --brand-700-rgb: 29 78 216;
+    --brand-800-rgb: 30 64 175;
+    --brand-900-rgb: 30 58 138;
+    --brand-950-rgb: 23 37 84;
     --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.07), 0 2px 4px -2px rgb(0 0 0 / 0.05);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.08), 0 4px 6px -4px rgb(0 0 0 / 0.05);
@@ -38,6 +50,9 @@
     --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
     --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.3);
   }
+
+  html { color-scheme: light; }
+  html.dark { color-scheme: dark; }
 
   * {
     border-color: var(--border-color);
@@ -135,7 +150,7 @@
   .input:focus {
     outline: none;
     border-color: var(--accent);
-    box-shadow: 0 0 0 3px rgb(59 130 246 / 0.1);
+    box-shadow: 0 0 0 3px rgb(var(--accent-rgb) / 0.12);
   }
   .input::placeholder {
     color: var(--text-tertiary);
