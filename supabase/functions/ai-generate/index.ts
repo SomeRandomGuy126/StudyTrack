@@ -88,7 +88,19 @@ SUPPORTED ACTIONS:
 }
 Use this exact action when the student asks to add or create a topic. The subject_name must match one of the subjects in the supplied app context.
 
-3. Create a task:
+3. Create a subtopic under an existing parent topic:
+{
+  "type": "create_subtopic",
+  "payload": {
+    "name": "Light-dependent reaction",
+    "parent_topic_name": "Photosynthesis",
+    "subject_name": "Biology",
+    "description": ""
+  }
+}
+Use this exact action when the student asks to add a subtopic. The parent topic must already exist. Never create it as a top-level topic.
+
+4. Create a task:
 {
   "type": "create_task",
   "payload": {
@@ -111,7 +123,7 @@ Use this exact action when the student asks to add or create a topic. The subjec
   }
 }
 
-5. Log a study session:
+6. Log a study session:
 {
   "type": "create_study_session",
   "payload": {
@@ -124,7 +136,7 @@ Use this exact action when the student asks to add or create a topic. The subjec
   }
 }
 
-6. Create a flashcard:
+7. Create a flashcard:
 {
   "type": "create_flashcard",
   "payload": {
