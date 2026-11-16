@@ -103,68 +103,75 @@ export function AIAssistant({ open, onClose }: Props) {
     await saveMessage('user', userMessage, null);
 
     let response = '';
-let action: string | null = null;
+    let action: string | null = null;
 
-try {
-  const context = buildAppContext(data);
-  const history = messages
-    .filter((m) => m.id !== 'welcome')
-    .slice(-12)
-    .map((m) => ({
-      role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
-      content: m.content,
-    }));
+    try {
+      // Handle clear topic-creation requests directly so they do not depend on
+      // the model inventing the exact action name and payload keys.
+      const topicRequest = extractCreateTopicRequest(userMessage, data.subjects);
+      if (topicRequest) {
+        const execution = await executeAgentAction(
+          { type: 'create_topic', payload: topicRequest },
+          data,
+          user!.id
+        );
+        response = execution.summary;
+        if (execution.success) {
+          action = execution.summary;
+          await data.refresh();
+        }
+      } else {
+        const context = buildAppContext(data);
+        const history = messages
+          .filter((m) => m.id !== 'welcome')
+          .slice(-12)
+          .map((m) => ({
+            role: m.role === 'user' ? ('user' as const) : ('assistant' as const),
+            content: m.content,
+          }));
 
-  const result = await agentTurn({
-    message: userMessage,
-    history,
-    context,
-  });
+        const result = await agentTurn({
+          message: userMessage,
+          history,
+          context,
+        });
 
-  response = result.message;
+        const successfulActions: string[] = [];
+        const failedActions: string[] = [];
 
-  const successfulActions: string[] = [];
-  const failedActions: string[] = [];
+        for (const agentAction of result.actions) {
+          if (
+            !agentAction ||
+            typeof agentAction.type !== 'string' ||
+            !agentAction.payload ||
+            typeof agentAction.payload !== 'object' ||
+            Array.isArray(agentAction.payload)
+          ) {
+            failedActions.push('The AI returned an invalid action, so no change was made.');
+            continue;
+          }
 
-  for (const agentAction of result.actions) {
-    if (
-      !agentAction ||
-      typeof agentAction.type !== 'string' ||
-      !agentAction.payload ||
-      typeof agentAction.payload !== 'object' ||
-      Array.isArray(agentAction.payload)
-    ) {
-      failedActions.push('The AI returned an invalid action.');
-      continue;
+          const execution = await executeAgentAction(agentAction, data, user!.id);
+          if (execution.success) successfulActions.push(execution.summary);
+          else failedActions.push(execution.summary);
+        }
+
+        if (result.actions.length > 0) {
+          // For app changes, show only the website's verified result.
+          response = [...successfulActions, ...failedActions].join('\n\n');
+          if (successfulActions.length > 0) {
+            action = successfulActions.join(' ');
+            await data.refresh();
+          }
+        } else {
+          response = result.message;
+        }
+      }
+    } catch (e) {
+      setError(e instanceof AiError ? e.message : 'Something went wrong. Please try again.');
+      setLoading(false);
+      return;
     }
-
-    const execution = await executeAgentAction(
-      agentAction,
-      data,
-      user!.id
-    );
-
-    if (execution.success) {
-      successfulActions.push(execution.summary);
-    } else {
-      failedActions.push(execution.summary);
-    }
-  }
-
-  if (successfulActions.length > 0) {
-    action = successfulActions.join(' ');
-    response += `\n\n${successfulActions.join('\n')}`;
-    data.refresh();
-  }
-
-  if (failedActions.length > 0) {
-    response += `\n\n${failedActions.join('\n')}`;
-  }
-} catch (e) {
-  setError(e instanceof AiError ? e.message : 'Something went wrong. Please try again.');
-  setLoading(false);
-  return;
-}
 
     const assistantMsg: AiMessage = {
       id: crypto.randomUUID(),
@@ -375,6 +382,35 @@ type ActionExecutionResult = {
   summary: string;
 };
 
+function extractCreateTopicRequest(
+  message: string,
+  subjects: { name: string }[]
+): { name: string; subject_name: string } | null {
+  const patterns = [
+    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(?:a\\s+|new\\s+)?topic\\s+(?:called|named)\\s+(.+?)\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
+    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(?:a\\s+|new\\s+)?topic\\s+(.+?)\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
+    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:add|create|make)\\s+(.+?)\\s+as\\s+a\\s+topic\\s+(?:to|in|under|for)\\s+(.+?)(?:\\s+please)?[.!?]*$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = message.trim().match(pattern);
+    if (!match) continue;
+
+    const clean = (value: string) =>
+      value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
+    const name = clean(match[1]);
+    const requestedSubject = clean(match[2]);
+    if (!name || !requestedSubject) continue;
+
+    const subject = subjects.find(
+      (item) => item.name.trim().toLowerCase() === requestedSubject.toLowerCase()
+    );
+    return { name, subject_name: subject?.name ?? requestedSubject };
+  }
+
+  return null;
+}
+
 async function executeAgentAction(
   action: StudyAgentAction,
   data: ReturnType<typeof useUserData>,
@@ -434,21 +470,50 @@ async function executeAgentAction(
       }
 
       case 'create_topic': {
-        const name = getText('name');
-        const subjectName = getText('subject_name');
+        const name = getText('name') || getText('topic_name') || getText('title');
+        const subjectName = getText('subject_name') || getText('subject');
 
         if (!name || !subjectName) {
-          return failed('A topic name and subject name are required.');
+          return failed('A topic name and subject name are required. No topic was added.');
         }
 
-        const subject = findSubject(subjectName);
+        const { data: subjectRows, error: subjectError } = await supabase
+          .from('subjects')
+          .select('id, name')
+          .eq('user_id', userId);
+
+        if (subjectError) {
+          console.error('Could not load subjects for topic creation:', subjectError);
+          return failed('I could not check your subjects, so I did not add the topic. Please try again.');
+        }
+
+        const subject = (subjectRows ?? []).find(
+          (item) => item.name.trim().toLowerCase() === subjectName.toLowerCase()
+        );
         if (!subject) {
-          return failed(`I couldn't find the subject "${subjectName}".`);
+          return failed('I could not find the subject "' + subjectName + '". No topic was added.');
         }
 
-        if (findTopic(name, subject.id)) {
-          return failed(`The topic "${name}" already exists in ${subject.name}.`);
+        const { data: existingTopics, error: topicsError } = await supabase
+          .from('topics')
+          .select('id, name, position')
+          .eq('subject_id', subject.id);
+
+        if (topicsError) {
+          console.error('Could not check existing topics:', topicsError);
+          return failed('I could not check existing topics in ' + subject.name + ', so I did not add anything.');
         }
+
+        if ((existingTopics ?? []).some(
+          (topic) => topic.name.trim().toLowerCase() === name.toLowerCase()
+        )) {
+          return failed('The topic "' + name + '" already exists in ' + subject.name + '. I did not create a duplicate.');
+        }
+
+        const nextPosition = (existingTopics ?? []).reduce(
+          (highest, topic) => Math.max(highest, Number(topic.position ?? -1)),
+          -1
+        ) + 1;
 
         const { data: created, error } = await supabase
           .from('topics')
@@ -457,24 +522,22 @@ async function executeAgentAction(
             name,
             description: getText('description') || null,
             parent_id: null,
-            position: data.topics.filter(
-              (topic) => topic.subject_id === subject.id
-            ).length,
+            position: nextPosition,
             is_difficult: false,
           })
           .select('id, name')
           .single();
 
         if (error || !created) {
-          return failed(`I couldn't create the topic "${name}".`);
+          console.error('Topic creation failed:', error);
+          return failed('I could not save "' + name + '" in ' + subject.name + '. No topic was added.');
         }
 
         return {
           success: true,
-          summary: `Added "${created.name}" to ${subject.name}.`,
+          summary: 'Added "' + created.name + '" to ' + subject.name + '.',
         };
       }
-
       case 'create_task': {
         const title = getText('title');
         if (!title) return failed('A task title is required.');
