@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,6 +20,18 @@ export function SubjectsPage() {
   const [editingSubject, setEditingSubject] = useState<Subject | null>(null);
   const [showTopicModal, setShowTopicModal] = useState<{ parentId: string | null; editing?: Topic } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'subject' | 'topic'; id: string; name: string } | null>(null);
+
+  // Automatically reveal newly-created subtopics so AI-created items are visible.
+  useEffect(() => {
+    const parentsWithChildren = data.topics.filter((topic) => topic.parent_id).map((topic) => topic.parent_id as string);
+    if (parentsWithChildren.length) {
+      setExpandedTopics((previous) => {
+        const next = new Set(previous);
+        parentsWithChildren.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }, [data.topics]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -63,6 +75,7 @@ export function SubjectsPage() {
               {hasChildren ? (expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />) : null}
             </button>
             <span className="text-sm text-primary flex-1 truncate">{topic.name}</span>
+            {topic.teacher_name && <span className="text-xs text-tertiary shrink-0">· {topic.teacher_name}</span>}
             {topic.is_difficult && (
               <AlertCircle size={14} className="text-orange-500 shrink-0" />
             )}
