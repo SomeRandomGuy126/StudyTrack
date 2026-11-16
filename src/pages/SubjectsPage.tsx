@@ -244,6 +244,7 @@ export function SubjectsPage() {
           subjectId={selectedSubject.id}
           parentId={showTopicModal.parentId}
           position={showTopicModal.editing ? showTopicModal.editing.position : (data.topics.filter(t => t.parent_id === showTopicModal.parentId && t.subject_id === selectedSubject.id).length)}
+          teacherNames={selectedSubject.teacher_names ?? []}
           onClose={() => setShowTopicModal(null)}
           onSaved={() => { setShowTopicModal(null); data.refresh(); }}
         />
@@ -272,6 +273,7 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
   const [color, setColor] = useState(subject?.color ?? SUBJECT_COLORS[0]);
   const [examBoard, setExamBoard] = useState(subject?.exam_board ?? '');
   const [qualificationLevel, setQualificationLevel] = useState(subject?.qualification_level ?? '');
+  const [teacherNames, setTeacherNames] = useState((subject?.teacher_names ?? []).join(', '));
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -279,11 +281,12 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
     if (subject) {
       await supabase.from('subjects').update({
         name, color, exam_board: examBoard || null, qualification_level: qualificationLevel || null,
+        teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean),
       }).eq('id', subject.id);
     } else {
       await supabase.from('subjects').insert({
         user_id: userId, name, color, exam_board: examBoard || null,
-        qualification_level: qualificationLevel || null, position,
+        qualification_level: qualificationLevel || null, teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean), position,
       });
     }
     setSaving(false);
@@ -328,6 +331,11 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
             </select>
           </div>
         </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Teachers (optional)</label>
+          <input className="input" value={teacherNames} onChange={(e) => setTeacherNames(e.target.value)} placeholder="e.g. Mrs Smith, Mr Jones" />
+          <p className="text-xs text-tertiary mt-1">Separate multiple teachers with commas.</p>
+        </div>
         <div className="flex gap-3 justify-end pt-2">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
@@ -344,22 +352,24 @@ function TopicModal({ topic, subjectId, parentId, position, onClose, onSaved }: 
   subjectId: string;
   parentId: string | null;
   position: number;
+  teacherNames: string[];
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [name, setName] = useState(topic?.name ?? '');
   const [description, setDescription] = useState(topic?.description ?? '');
   const [isDifficult, setIsDifficult] = useState(topic?.is_difficult ?? false);
+  const [teacherName, setTeacherName] = useState(topic?.teacher_name ?? '');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
     setSaving(true);
     if (topic) {
-      await supabase.from('topics').update({ name, description: description || null, is_difficult: isDifficult }).eq('id', topic.id);
+      await supabase.from('topics').update({ name, description: description || null, is_difficult: isDifficult, teacher_name: teacherName || null }).eq('id', topic.id);
     } else {
       await supabase.from('topics').insert({
         subject_id: subjectId, parent_id: parentId, name,
-        description: description || null, is_difficult: isDifficult, position,
+        description: description || null, is_difficult: isDifficult, teacher_name: teacherName || null, position,
       });
     }
     setSaving(false);
@@ -376,6 +386,17 @@ function TopicModal({ topic, subjectId, parentId, position, onClose, onSaved }: 
         <div>
           <label className="block text-sm font-medium text-secondary mb-1.5">Description (optional)</label>
           <textarea className="input min-h-[80px]" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of what this topic covers" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Teacher (optional)</label>
+          {teacherNames.length > 0 ? (
+            <select className="input" value={teacherName} onChange={(e) => setTeacherName(e.target.value)}>
+              <option value="">No teacher selected</option>
+              {teacherNames.map((teacher) => <option key={teacher} value={teacher}>{teacher}</option>)}
+            </select>
+          ) : (
+            <input className="input" value={teacherName} onChange={(e) => setTeacherName(e.target.value)} placeholder="Enter teacher name (optional)" />
+          )}
         </div>
         <label className="flex items-center gap-2 cursor-pointer">
           <input type="checkbox" checked={isDifficult} onChange={(e) => setIsDifficult(e.target.checked)} className="rounded accent-brand-500" />
