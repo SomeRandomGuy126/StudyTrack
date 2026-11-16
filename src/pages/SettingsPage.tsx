@@ -19,7 +19,7 @@ const AI_DEPTHS = [
 
 export function SettingsPage() {
   const { profile, updateProfile, signOut } = useAuth();
-  const { theme, setTheme, accent, setAccent } = useTheme();
+  const { themeMode, setTheme, accent, setAccent, interfaceSize, setInterfaceSize } = useTheme();
   const [aiTone, setAiTone] = useState(profile?.ai_tone ?? 'friendly');
   const [aiDepth, setAiDepth] = useState(profile?.ai_depth ?? 'balanced');
   const [displayName, setDisplayName] = useState(profile?.display_name ?? '');
@@ -172,34 +172,65 @@ export function SettingsPage() {
             <h3 className="font-semibold text-primary">Appearance</h3>
           </div>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-secondary mb-2">Accent colour</label>
-            <div className="flex flex-wrap gap-2">
+            <label className="block text-sm font-medium text-secondary mb-2">Theme palette</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
               {ACCENTS.map((a) => (
                 <button
                   key={a.id}
                   onClick={() => setAccent(a.id)}
-                  className={`w-9 h-9 rounded-full transition-all hover:scale-110 ${accent === a.id ? 'ring-2 ring-offset-2 ring-offset-transparent' : ''}`}
-                  style={{ backgroundColor: a.color, boxShadow: accent === a.id ? `0 0 0 2px ${a.color}` : undefined }}
-                  title={a.id}
-                />
+                  aria-pressed={accent === a.id}
+                  className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-all ${accent === a.id ? 'border-brand-500 bg-brand-500/5' : 'border-app hover:surface-tertiary'}`}
+                >
+                  <span className="w-7 h-7 rounded-full shrink-0 ring-1 ring-black/10" style={{ backgroundColor: a.color }} />
+                  <span className="min-w-0">
+                    <span className="block text-xs font-medium text-primary">{a.label}</span>
+                    <span className="block text-[10px] text-tertiary">{a.hint}</span>
+                  </span>
+                </button>
               ))}
             </div>
+            <p className="text-xs text-tertiary mt-2">Web Hero and Grand Voyage are original colour palettes, not official character artwork or logos.</p>
           </div>
-          <div className="flex gap-3">
-            <button
-              onClick={() => setTheme('light')}
-              className={`flex-1 p-4 rounded-lg border-2 transition-all ${theme === 'light' ? 'border-brand-500' : 'border-app'}`}
-            >
-              <Sun size={20} className="mx-auto mb-2 text-amber-500" />
-              <p className="text-sm font-medium text-primary">Light</p>
-            </button>
-            <button
-              onClick={() => setTheme('dark')}
-              className={`flex-1 p-4 rounded-lg border-2 transition-all ${theme === 'dark' ? 'border-brand-500' : 'border-app'}`}
-            >
-              <Moon size={20} className="mx-auto mb-2 text-brand-400" />
-              <p className="text-sm font-medium text-primary">Dark</p>
-            </button>
+          <label className="block text-sm font-medium text-secondary mb-2">Colour mode</label>
+          <div className="grid grid-cols-3 gap-2">
+            {([
+              { id: 'light', label: 'Light', icon: Sun },
+              { id: 'dark', label: 'Dark', icon: Moon },
+              { id: 'system', label: 'System', icon: Sparkles },
+            ] as const).map((mode) => {
+              const ModeIcon = mode.icon;
+              return (
+                <button
+                  key={mode.id}
+                  onClick={() => setTheme(mode.id)}
+                  aria-pressed={themeMode === mode.id}
+                  className={`p-3 rounded-lg border-2 transition-all ${themeMode === mode.id ? 'border-brand-500 bg-brand-500/5' : 'border-app'}`}
+                >
+                  <ModeIcon size={19} className="mx-auto mb-1.5 text-brand-500" />
+                  <p className="text-sm font-medium text-primary">{mode.label}</p>
+                </button>
+              );
+            })}
+          </div>
+          <div className="mt-4">
+            <label className="block text-sm font-medium text-secondary mb-2">Interface size</label>
+            <div className="grid grid-cols-3 gap-2">
+              {([
+                { id: 'compact', label: 'Compact' },
+                { id: 'comfortable', label: 'Default' },
+                { id: 'large', label: 'Large' },
+              ] as const).map((size) => (
+                <button
+                  key={size.id}
+                  onClick={() => setInterfaceSize(size.id)}
+                  aria-pressed={interfaceSize === size.id}
+                  className={`p-2.5 rounded-lg border-2 text-sm transition-all ${interfaceSize === size.id ? 'border-brand-500 bg-brand-500/5' : 'border-app'}`}
+                >
+                  {size.label}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-tertiary mt-2">Appearance preferences are saved on this device.</p>
           </div>
         </div>
 
