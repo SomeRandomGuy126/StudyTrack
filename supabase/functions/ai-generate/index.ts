@@ -193,11 +193,25 @@ Deno.serve(async (req) => {
 
     const systemPrompt = SYSTEM_PROMPTS[body.task] ?? SYSTEM_PROMPTS.tutor;
     const prefs = await loadUserPrefs(supabase, userData.user.id);
-    const styleDirective = `\n\nStyle: use a ${prefs.tone} tone and ${prefs.depth} depth of explanation.`;
+    const styleDirective = `\\n\\nStyle: use a ${prefs.tone} tone and ${prefs.depth} depth of explanation.`;
+    const appContext = typeof body.options?.context === "string"
+      ? body.options.context.slice(0, 4000)
+      : "";
+    const systemContent = systemPrompt + styleDirective +
+      (body.task === "agent" && appContext
+        ? `\\n\\nStudent's app context:\\n${appContext}`
+        : "");
+    const requestMessages = body.messages ?? [];
+    // Agent requests already include the current user message in requestMessages.
+    // Keep app context in the system instructions instead of appending it as
+    // another user turn, which could distract the model from the actual request.
+    const extraPrompt = body.task === "agent"
+      ? (requestMessages.length === 0 ? "Begin the lesson." : null)
+      : (buildUserPrompt({ ...body, material }) || "Begin the lesson.");
     const messages: ChatMessage[] = [
-      { role: "system", content: systemPrompt + styleDirective },
-      ...(body.messages ?? []),
-      { role: "user", content: buildUserPrompt({ ...body, material }) || "Begin the lesson." },
+      { role: "system", content: systemContent },
+      ...requestMessages,
+      ...(extraPrompt ? [{ role: "user" as const, content: extraPrompt }] : []),
     ];
 
     const temperature = body.task === "tutor" || body.task === "tutor_test" ? 0.6 : 0.4;
