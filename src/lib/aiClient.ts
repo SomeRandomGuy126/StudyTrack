@@ -30,12 +30,47 @@ async function callAi(body: Record<string, unknown>): Promise<AiResponse> {
 }
 
 function extractJson<T>(text: string): T {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/);
-  const raw = fenced ? fenced[1] : text;
-  const start = raw.search(/[[{]/);
-  if (start === -1) throw new AiError('The AI returned an unexpected response. Please try again.');
-  const parsed = JSON.parse(raw.slice(start)) as T;
-  return parsed;
+  const fencedBlocks = [...text.matchAll(/\x60{3}(?:json)?\s*([\s\S]*?)\x60{3}/gi)].map((match) => match[1]);
+  const candidates = [...fencedBlocks, text];
+
+  for (const candidate of candidates) {
+    for (let start = 0; start < candidate.length; start += 1) {
+      const opening = candidate[start];
+      if (opening !== '{' && opening !== '[') continue;
+
+      const stack: string[] = [];
+      let inString = false;
+      let escaped = false;
+
+      for (let end = start; end < candidate.length; end += 1) {
+        const char = candidate[end];
+        if (inString) {
+          if (escaped) escaped = false;
+          else if (char === '\\') escaped = true;
+          else if (char === '"') inString = false;
+          continue;
+        }
+        if (char === '"') {
+          inString = true;
+          continue;
+        }
+        if (char === '{' || char === '[') stack.push(char);
+        if (char === '}' || char === ']') {
+          const expected = char === '}' ? '{' : '[';
+          if (stack.pop() !== expected) break;
+          if (stack.length === 0) {
+            try {
+              return JSON.parse(candidate.slice(start, end + 1)) as T;
+            } catch {
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  throw new AiError('The AI response could not be read in the expected format. Please try again or use a smaller amount of material.');
 }
 
 export async function generateFlashcards(opts: {
@@ -171,13 +206,24 @@ export async function agentTurn(opts: {
     options: opts.context ? { context: opts.context } : undefined,
   });
 
-  const parsed = extractJson<AgentTurnResult>(text ?? '');
+  const raw = (text ?? '').trim();
+  let parsed: AgentTurnResult;
 
-  if (
-    typeof parsed.message !== 'string' ||
-    !Array.isArray(parsed.actions)
-  ) {
-    throw new AiError('The AI returned an invalid action response.');
+  try {
+    parsed = extractJson<AgentTurnResult>(raw);
+  } catch (error) {
+    // A conversational answer needs no action payload. Display it rather than
+    // rejecting the turn when a provider ignores JSON mode.
+    const fencePrefix = String.fromCharCode(96, 96, 96) + 'json';
+    const startsWithStructuredOutput = raw.startsWith('{') || raw.startsWith('[') || raw.startsWith(fencePrefix);
+    if (raw && !startsWithStructuredOutput) {
+      return { message: raw, actions: [] };
+    }
+    throw error;
+  }
+
+  if (typeof parsed.message !== 'string' || !Array.isArray(parsed.actions)) {
+    throw new AiError('The AI response was missing its message or actions. Please try again.');
   }
 
   return parsed;
