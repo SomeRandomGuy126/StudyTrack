@@ -33,6 +33,7 @@ export type Subject = {
   color: string;
   exam_board: string | null;
   qualification_level: string | null;
+  teacher_names: string[];
   icon: string | null;
   position: number;
   created_at: string;
@@ -46,6 +47,7 @@ export type Topic = {
   description: string | null;
   position: number;
   is_difficult: boolean;
+  teacher_name: string | null;
   created_at: string;
   children?: Topic[];
 };
