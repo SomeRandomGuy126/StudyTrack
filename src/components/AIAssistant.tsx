@@ -637,9 +637,15 @@ async function executeAgentAction(
           if (childInsertError || !insertedChildren) {
             console.error('Bulk curriculum subtopic insert failed:', childInsertError);
             const { data: verifyAfterFailure } = await supabase
-              .from('topics').select('id, parent_id').eq('subject_id', subject.id);
-            const savedParents = new Set((verifyAfterFailure ?? []).map((row) => row.parent_id).filter(Boolean));
-            return failed('Partially saved: ' + rootsCreated + ' main topics were created. A subtopic batch failed, so I stopped. Please refresh and check before retrying.');
+              .from('topics').select('name, parent_id').eq('subject_id', subject.id);
+            const savedPairs = new Set((verifyAfterFailure ?? []).map((row) =>
+              String(row.parent_id) + '::' + row.name.trim().toLowerCase()
+            ));
+            const confirmedChildren = childRows.filter((row) =>
+              savedPairs.has(row.parent_id + '::' + row.name.trim().toLowerCase())
+            ).length;
+            return failed('Partially saved and verified: ' + rootsCreated + ' main topics and ' + confirmedChildren +
+              ' subtopics are in the database. A later subtopic batch failed, so I stopped. Please refresh before retrying.');
           }
           childrenCreated += insertedChildren.length;
         }
