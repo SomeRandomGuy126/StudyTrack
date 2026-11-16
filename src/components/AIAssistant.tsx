@@ -167,7 +167,15 @@ export function AIAssistant({ open, onClose }: Props) {
             await data.refresh();
           }
         } else {
-          response = result.message;
+          // Never let the language model claim that an app change happened
+          // when it returned no executable action. A conversational reply is
+          // not proof that anything was written to Supabase.
+          const requestedAppChange =
+            /\b(add|create|make|save|update|edit|delete|remove|log|schedule|complete|mark|import|populate)\b/i.test(userMessage) &&
+            /\b(subject|topic|subtopic|task|note|flashcard|study session|revision|event|calendar|curriculum|syllabus|biology)\b/i.test(userMessage);
+          response = requestedAppChange
+            ? "I haven't changed anything. The AI did not return a save action, so nothing was written to your StudyTrack account. Please try again with a specific request."
+            : result.message;
         }
       }
     } catch (e) {
