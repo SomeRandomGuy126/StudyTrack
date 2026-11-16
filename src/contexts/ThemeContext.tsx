@@ -1,14 +1,14 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export const ACCENTS = [
-  { id: 'blue', label: 'Classic blue', hint: 'Clean and familiar', color: '#3b82f6', hover: '#2563eb' },
-  { id: 'green', label: 'Fresh green', hint: 'Calm and focused', color: '#22c55e', hover: '#16a34a' },
-  { id: 'violet', label: 'Violet', hint: 'Soft and creative', color: '#8b5cf6', hover: '#7c3aed' },
-  { id: 'amber', label: 'Amber', hint: 'Warm and bright', color: '#f59e0b', hover: '#d97706' },
-  { id: 'rose', label: 'Rose', hint: 'Bold pink-red', color: '#f43f5e', hover: '#e11d48' },
-  { id: 'cyan', label: 'Ocean cyan', hint: 'Cool and clear', color: '#06b6d4', hover: '#0891b2' },
-  { id: 'web-hero', label: 'Web hero', hint: 'Comic red and blue palette', color: '#e11d48', hover: '#be123c' },
-  { id: 'grand-voyage', label: 'Grand voyage', hint: 'Sea blue and treasure gold palette', color: '#d6a441', hover: '#b88722' },
+  { id: 'blue', label: 'Classic blue', hint: 'Clean and familiar', color: '#3b82f6', hover: '#2563eb', secondary: '#1e40af' },
+  { id: 'green', label: 'Fresh green', hint: 'Calm and focused', color: '#22c55e', hover: '#16a34a', secondary: '#166534' },
+  { id: 'violet', label: 'Violet', hint: 'Soft and creative', color: '#8b5cf6', hover: '#7c3aed', secondary: '#5b21b6' },
+  { id: 'amber', label: 'Amber', hint: 'Warm and bright', color: '#f59e0b', hover: '#d97706', secondary: '#92400e' },
+  { id: 'rose', label: 'Rose', hint: 'Bold pink-red', color: '#f43f5e', hover: '#e11d48', secondary: '#9f1239' },
+  { id: 'cyan', label: 'Ocean cyan', hint: 'Cool and clear', color: '#06b6d4', hover: '#0891b2', secondary: '#155e75' },
+  { id: 'web-hero', label: 'Web hero', hint: 'Comic red and deep navy palette', color: '#e11d48', hover: '#be123c', secondary: '#1e3a8a' },
+  { id: 'grand-voyage', label: 'Grand voyage', hint: 'Sea blue and treasure gold palette', color: '#d6a441', hover: '#b88722', secondary: '#0c4a6e' },
 ] as const;
 
 export type AccentId = (typeof ACCENTS)[number]['id'];
@@ -80,6 +80,8 @@ function applyAccent(accent: (typeof ACCENTS)[number]) {
   root.style.setProperty('--accent', accent.color);
   root.style.setProperty('--accent-hover', accent.hover);
   root.style.setProperty('--accent-rgb', rgb.join(' '));
+  root.style.setProperty('--accent-secondary', accent.secondary);
+  root.style.setProperty('--accent-secondary-rgb', toRgb(accent.secondary).join(' '));
   Object.entries(shades).forEach(([shade, value]) => {
     root.style.setProperty(`--brand-${shade}-rgb`, value);
   });
