@@ -207,7 +207,7 @@ Deno.serve(async (req) => {
     // another user turn, which could distract the model from the actual request.
     const extraPrompt = body.task === "agent"
       ? (requestMessages.length === 0 ? "Begin the lesson." : null)
-      : (buildUserPrompt({ ...body, material }) || "Begin the lesson.");
+      : (buildUserPrompt({ ...body, material }) || (requestMessages.length === 0 ? "Begin the lesson." : null));
     const messages: ChatMessage[] = [
       { role: "system", content: systemContent },
       ...requestMessages,
