@@ -100,7 +100,23 @@ Use this exact action when the student asks to add or create a topic. The subjec
 }
 Use this exact action when the student asks to add a subtopic. The parent topic must already exist. Never create it as a top-level topic.
 
-4. Create a task:
+4. Create multiple topics and subtopics in one verified curriculum import:
+{
+  "type": "create_topics_bulk",
+  "payload": {
+    "subject_name": "Biology",
+    "topics": [
+      {
+        "name": "Biological molecules",
+        "year": 12,
+        "subtopics": ["Monomers and polymers", "Carbohydrates", "Lipids"]
+      }
+    ]
+  }
+}
+Use this action when the student asks to add a whole curriculum, syllabus, or multiple topics at once. Generate the complete requested list as nested parent topics and subtopics. Use the official named specification when the exam board and qualification are supplied. Do not include required practicals, experiments, or practical activities when the student says to exclude them. Do not split subtopics into separate top-level topics. Keep the list to at most 30 parent topics and 600 subtopics. Never say it was saved; the website will insert and verify the rows.
+
+5. Create a task:
 {
   "type": "create_task",
   "payload": {
@@ -305,7 +321,7 @@ Deno.serve(async (req) => {
             model,
             messages,
             temperature,
-            max_tokens: 2400,
+            max_tokens: body.task === "agent" ? 7000 : 2400,
             ...(provider.label === "Groq" && model.startsWith("openai/gpt-oss-")
               ? { reasoning_effort: "low" }
               : {}),
