@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { supabase } from '@/lib/supabase';
 import {
   GraduationCap, LayoutDashboard, BookOpen, Clock, RefreshCw, CheckSquare,
   Calendar, StickyNote, Layers, BarChart3, Bot, Settings, LogOut,
@@ -23,6 +24,13 @@ type Page =
   | 'dashboard' | 'learning' | 'subjects' | 'study' | 'revision' | 'tasks'
   | 'calendar' | 'notes' | 'flashcards' | 'analytics' | 'settings';
 
+type SearchResult = {
+  id: string;
+  title: string;
+  detail: string;
+  page: Page;
+};
+
 const NAV_ITEMS: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
   { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { id: 'learning', label: 'Learning Centre', icon: Sparkles },
@@ -37,14 +45,88 @@ const NAV_ITEMS: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
 ];
 
 export function AppShell() {
-  const { profile, signOut } = useAuth();
+  const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [page, setPage] = useState<Page>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
 
   const navItems = NAV_ITEMS;
+
+  useEffect(() => {
+    const query = search.trim();
+    if (!user || query.length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setSearching(true);
+      const pattern = `%${query}%`;
+
+      try {
+        const subjectsRequest = supabase
+          .from('subjects')
+          .select('id, name')
+          .eq('user_id', user.id)
+          .ilike('name', pattern)
+          .limit(5);
+
+        const [subjects, tasks, notes, flashcards, events] = await Promise.all([
+          subjectsRequest,
+          supabase.from('tasks').select('id, title, status').eq('user_id', user.id).ilike('title', pattern).limit(5),
+          supabase.from('notes').select('id, title').eq('user_id', user.id).ilike('title', pattern).limit(5),
+          supabase.from('flashcards').select('id, front').eq('user_id', user.id).ilike('front', pattern).limit(5),
+          supabase.from('calendar_events').select('id, title, event_type').eq('user_id', user.id).ilike('title', pattern).limit(5),
+        ]);
+
+        const subjectRows = subjects.data ?? [];
+        const subjectIds = subjectRows.map((subject) => subject.id);
+        const topics = subjectIds.length
+          ? await supabase.from('topics').select('id, name, subject_id').in('subject_id', subjectIds).ilike('name', pattern).limit(5)
+          : { data: [] };
+
+        if (cancelled) return;
+
+        const results: SearchResult[] = [
+          ...subjectRows.map((item) => ({ id: item.id, title: item.name, detail: 'Subject', page: 'subjects' as const })),
+          ...(topics.data ?? []).map((item) => ({
+            id: item.id, title: item.name,
+            detail: `Topic in ${subjectRows.find((subject) => subject.id === item.subject_id)?.name ?? 'Subject'}`,
+            page: 'subjects' as const,
+          })),
+          ...(tasks.data ?? []).map((item) => ({ id: item.id, title: item.title, detail: 'Task', page: 'tasks' as const })),
+          ...(notes.data ?? []).map((item) => ({ id: item.id, title: item.title, detail: 'Note', page: 'notes' as const })),
+          ...(flashcards.data ?? []).map((item) => ({ id: item.id, title: item.front, detail: 'Flashcard', page: 'flashcards' as const })),
+          ...(events.data ?? []).map((item) => ({ id: item.id, title: item.title, detail: 'Calendar event', page: 'calendar' as const })),
+        ].slice(0, 12);
+
+        setSearchResults(results);
+      } catch (error) {
+        console.error('Global search failed:', error);
+        if (!cancelled) setSearchResults([]);
+      } finally {
+        if (!cancelled) setSearching(false);
+      }
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [search, user]);
+
+  const selectSearchResult = (result: SearchResult) => {
+    setPage(result.page);
+    setSearch('');
+    setSearchResults([]);
+    setSidebarOpen(false);
+  };
 
   const renderPage = () => {
     switch (page) {
@@ -141,7 +223,47 @@ export function AppShell() {
               placeholder="Search subjects, topics, tasks..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  setSearch('');
+                  setSearchResults([]);
+                }
+                if (e.key === 'Enter' && searchResults[0]) {
+                  selectSearchResult(searchResults[0]);
+                }
+              }}
+              aria-label="Search your StudyTrack data"
+              aria-expanded={search.trim().length >= 2}
+              aria-controls="global-search-results"
             />
+            {search.trim().length >= 2 && (
+              <div
+                id="global-search-results"
+                className="absolute top-full left-0 right-0 mt-2 rounded-xl border border-app surface shadow-xl z-50 overflow-hidden"
+                role="listbox"
+              >
+                {searching ? (
+                  <p className="px-4 py-3 text-sm text-secondary">Searching your StudyTrack...</p>
+                ) : searchResults.length > 0 ? (
+                  <div className="max-h-80 overflow-y-auto py-1">
+                    {searchResults.map((result) => (
+                      <button
+                        key={`${result.page}-${result.id}`}
+                        type="button"
+                        onClick={() => selectSearchResult(result)}
+                        className="w-full text-left px-4 py-2.5 hover:surface-tertiary transition-colors"
+                        role="option"
+                      >
+                        <span className="block text-sm font-medium text-primary truncate">{result.title}</span>
+                        <span className="block text-xs text-tertiary mt-0.5">{result.detail}</span>
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="px-4 py-3 text-sm text-secondary">No matching subjects, topics, tasks, notes, flashcards or events.</p>
+                )}
+              </div>
+            )
           </div>
 
           <div className="flex items-center gap-2">
