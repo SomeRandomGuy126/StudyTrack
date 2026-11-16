@@ -7,6 +7,7 @@ import { GraduationCap, ArrowRight, ArrowLeft, Plus, X, Check } from 'lucide-rea
 type SubjectEntry = {
   name: string;
   exam_board: string;
+  qualification_level: string;
   color: string;
 };
 
@@ -16,7 +17,7 @@ export function OnboardingPage() {
   const [displayName, setDisplayName] = useState('');
   const [educationLevel, setEducationLevel] = useState(EDUCATION_LEVELS[0]);
   const [school, setSchool] = useState('');
-  const [subjects, setSubjects] = useState<SubjectEntry[]>([{ name: '', exam_board: '', color: SUBJECT_COLORS[0] }]);
+  const [subjects, setSubjects] = useState<SubjectEntry[]>([{ name: '', exam_board: '', qualification_level: EDUCATION_LEVELS[0], color: SUBJECT_COLORS[0] }]);
   const [studyDays, setStudyDays] = useState<string[]>([]);
   const [hoursPerWeek, setHoursPerWeek] = useState(10);
   const [saving, setSaving] = useState(false);
@@ -31,7 +32,7 @@ export function OnboardingPage() {
   const addSubject = () => {
     setSubjects((prev) => [
       ...prev,
-      { name: '', exam_board: '', color: SUBJECT_COLORS[prev.length % SUBJECT_COLORS.length] },
+      { name: '', exam_board: '', qualification_level: educationLevel, color: SUBJECT_COLORS[prev.length % SUBJECT_COLORS.length] },
     ]);
   };
 
@@ -75,7 +76,7 @@ export function OnboardingPage() {
         user_id: user.id,
         name: s.name.trim(),
         exam_board: s.exam_board.trim() || null,
-        qualification_level: educationLevel,
+        qualification_level: s.qualification_level || educationLevel,
         color: s.color,
         position: (existingSubjects?.length ?? 0) + i,
       }));
@@ -167,7 +168,8 @@ export function OnboardingPage() {
           {step === 1 && (
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-secondary mb-1.5">Educational level</label>
+                <label className="block text-sm font-medium text-secondary mb-1.5">Main qualification</label>
+                <p className="text-xs text-tertiary mb-2">This is your default. You can choose a different qualification for each subject in the next step, such as A-Level Biology and BTEC Applied Science.</p>
                 <select className="input" value={educationLevel} onChange={(e) => setEducationLevel(e.target.value)}>
                   {EDUCATION_LEVELS.map((l) => (
                     <option key={l} value={l}>{l}</option>
@@ -205,6 +207,16 @@ export function OnboardingPage() {
                       onChange={(e) => updateSubject(idx, 'name', e.target.value)}
                       placeholder="Subject name (e.g. Biology)"
                     />
+                    <select
+                      className="input"
+                      value={s.qualification_level}
+                      onChange={(e) => updateSubject(idx, 'qualification_level', e.target.value)}
+                      aria-label={`Qualification for ${s.name || `subject ${idx + 1}`}`}
+                    >
+                      {EDUCATION_LEVELS.map((level) => (
+                        <option key={level} value={level}>{level}</option>
+                      ))}
+                    </select>
                     <input
                       className="input"
                       value={s.exam_board}
