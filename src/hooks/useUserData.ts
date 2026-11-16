@@ -1,10 +1,13 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import type { Subject, Topic, StudySession, Revision, Task, Project, Note, Flashcard, CalendarEvent } from '@/lib/supabase';
 
+const DATA_REFRESH_EVENT = 'studytrack:data-refresh';
+
 export function useUserData() {
   const { user } = useAuth();
+  const instanceId = useId();
   const [subjects, setSubjects] = useState<Subject[]>([]);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [studySessions, setStudySessions] = useState<StudySession[]>([]);
@@ -47,7 +50,28 @@ export function useUserData() {
     loadAll();
   }, [loadAll]);
 
-  const refresh = useCallback(() => loadAll(), [loadAll]);
+  // Each component has its own useUserData instance. Broadcast refreshes so
+  // changes made by the AI drawer are also reflected in the currently visible
+  // page (and vice versa), while avoiding a duplicate fetch in the sender.
+  useEffect(() => {
+    const handleDataRefresh = (event: Event) => {
+      const detail = (event as CustomEvent<{ userId?: string; sourceId?: string }>).detail;
+      if (detail?.sourceId === instanceId) return;
+      if (detail?.userId && detail.userId !== user?.id) return;
+      void loadAll();
+    };
+
+    window.addEventListener(DATA_REFRESH_EVENT, handleDataRefresh);
+    return () => window.removeEventListener(DATA_REFRESH_EVENT, handleDataRefresh);
+  }, [instanceId, loadAll, user?.id]);
+
+  const refresh = useCallback(async () => {
+    if (!user?.id) return;
+    window.dispatchEvent(new CustomEvent(DATA_REFRESH_EVENT, {
+      detail: { userId: user.id, sourceId: instanceId },
+    }));
+    await loadAll();
+  }, [instanceId, loadAll, user?.id]);
 
   // Build topic tree helper
   const getTopicTree = (subjectId: string): Topic[] => {
