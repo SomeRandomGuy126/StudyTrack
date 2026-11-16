@@ -147,7 +147,7 @@ export function AppShell() {
   const SidebarContent = () => (
     <>
       <div className="flex items-center gap-3 px-4 py-5 border-b border-app">
-        <div className="w-9 h-9 bg-brand-600 rounded-lg flex items-center justify-center text-white shrink-0">
+        <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' }}>
           <GraduationCap size={20} />
         </div>
         <span className="text-lg font-bold text-primary">StudyTrack</span>
