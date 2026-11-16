@@ -181,7 +181,7 @@ export function SettingsPage() {
                   aria-pressed={accent === a.id}
                   className={`flex items-center gap-2 rounded-lg border p-2 text-left transition-all ${accent === a.id ? 'border-brand-500 bg-brand-500/5' : 'border-app hover:surface-tertiary'}`}
                 >
-                  <span className="w-7 h-7 rounded-full shrink-0 ring-1 ring-black/10" style={{ backgroundColor: a.color }} />
+                  <span className="w-7 h-7 rounded-full shrink-0 ring-1 ring-black/10" style={{ background: `linear-gradient(135deg, ${a.secondary}, ${a.color})` }} />
                   <span className="min-w-0">
                     <span className="block text-xs font-medium text-primary">{a.label}</span>
                     <span className="block text-[10px] text-tertiary">{a.hint}</span>
