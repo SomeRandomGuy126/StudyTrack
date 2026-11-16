@@ -48,6 +48,46 @@ export function OnboardingPage() {
     setSaving(true);
     setError(null);
 
+    const validSubjects = subjects.filter((s) => s.name.trim());
+
+    // Save subjects before marking onboarding complete. If the insert fails,
+    // the student stays on this page and can safely retry.
+    const { data: existingSubjects, error: existingErr } = await supabase
+      .from('subjects')
+      .select('name')
+      .eq('user_id', user.id);
+
+    if (existingErr) {
+      setError(existingErr.message);
+      setSaving(false);
+      return;
+    }
+
+    const existingNames = new Set(
+      (existingSubjects ?? []).map((s) => s.name.trim().toLowerCase())
+    );
+    const newSubjects = validSubjects.filter(
+      (s) => !existingNames.has(s.name.trim().toLowerCase())
+    );
+
+    if (newSubjects.length > 0) {
+      const rows = newSubjects.map((s, i) => ({
+        user_id: user.id,
+        name: s.name.trim(),
+        exam_board: s.exam_board.trim() || null,
+        qualification_level: educationLevel,
+        color: s.color,
+        position: (existingSubjects?.length ?? 0) + i,
+      }));
+      const { error: subErr } = await supabase.from('subjects').insert(rows);
+      if (subErr) {
+        setError(subErr.message);
+        setSaving(false);
+        return;
+      }
+    }
+
+    // Only complete onboarding after the subject records have been saved.
     const { error: profErr } = await updateProfile({
       display_name: displayName,
       education_level: educationLevel,
@@ -60,24 +100,6 @@ export function OnboardingPage() {
       setError(profErr);
       setSaving(false);
       return;
-    }
-
-    const validSubjects = subjects.filter((s) => s.name.trim());
-    if (validSubjects.length > 0) {
-      const rows = validSubjects.map((s, i) => ({
-        user_id: user.id,
-        name: s.name.trim(),
-        exam_board: s.exam_board.trim() || null,
-        qualification_level: educationLevel,
-        color: s.color,
-        position: i,
-      }));
-      const { error: subErr } = await supabase.from('subjects').insert(rows);
-      if (subErr) {
-        setError(subErr.message);
-        setSaving(false);
-        return;
-      }
     }
 
     setSaving(false);
