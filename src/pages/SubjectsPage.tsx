@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/Common';
-import { SUBJECT_COLORS } from '@/lib/spacedRepetition';
+import { EDUCATION_LEVELS, SUBJECT_COLORS } from '@/lib/spacedRepetition';
 import type { Subject, Topic } from '@/lib/supabase';
 import {
   BookOpen, Plus, ChevronRight, ChevronDown, FolderPlus, Edit2, Trash2,
@@ -317,7 +317,15 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
           </div>
           <div>
             <label className="block text-sm font-medium text-secondary mb-1.5">Qualification</label>
-            <input className="input" value={qualificationLevel} onChange={(e) => setQualificationLevel(e.target.value)} placeholder="e.g. A-Level" />
+            <select className="input" value={qualificationLevel} onChange={(e) => setQualificationLevel(e.target.value)}>
+              <option value="">Select qualification...</option>
+              {qualificationLevel && !EDUCATION_LEVELS.includes(qualificationLevel) && (
+                <option value={qualificationLevel}>{qualificationLevel}</option>
+              )}
+              {EDUCATION_LEVELS.map((level) => (
+                <option key={level} value={level}>{level}</option>
+              ))}
+            </select>
           </div>
         </div>
         <div className="flex gap-3 justify-end pt-2">
