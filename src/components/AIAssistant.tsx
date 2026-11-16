@@ -108,13 +108,16 @@ export function AIAssistant({ open, onClose }: Props) {
     try {
       // Route explicit topic and subtopic creation requests deterministically.
       // This avoids depending on the model to invent action names or payload fields.
-      const subtopicRequest = extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
-      const topicRequest = subtopicRequest ? null : extractCreateTopicRequest(userMessage, data.subjects);
-      const directRequest = subtopicRequest
-        ? { type: 'create_subtopic', payload: subtopicRequest }
-        : topicRequest
-          ? { type: 'create_topic', payload: topicRequest }
-          : null;
+      const bulkRequest = extractBulkCurriculumRequest(userMessage, messages, data.subjects);
+      const subtopicRequest = bulkRequest ? null : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
+      const topicRequest = bulkRequest || subtopicRequest ? null : extractCreateTopicRequest(userMessage, data.subjects);
+      const directRequest = bulkRequest
+        ? { type: 'create_topics_bulk', payload: bulkRequest }
+        : subtopicRequest
+          ? { type: 'create_subtopic', payload: subtopicRequest }
+          : topicRequest
+            ? { type: 'create_topic', payload: topicRequest }
+            : null;
       if (directRequest) {
         const execution = await executeAgentAction(directRequest, data, user!.id);
         response = execution.summary;
@@ -447,6 +450,70 @@ function extractCreateSubtopicRequest(
   return null;
 }
 
+type BulkCurriculumTopic = {
+  name: string;
+  year: 12 | 13;
+  subtopics: string[];
+};
+
+function extractBulkCurriculumRequest(
+  message: string,
+  history: AiMessage[],
+  subjects: { name: string }[]
+): { subject_name: string; topics: BulkCurriculumTopic[] } | null {
+  const biology = subjects.find((subject) => subject.name.trim().toLowerCase() === 'biology');
+  if (!biology) return null;
+
+  const asksToAdd = /\\b(add|import|populate|create|put)\\b/i.test(message) &&
+    /\\b(curriculum|topics|biology|syllabus|list)\\b/i.test(message);
+  const candidates = [
+    message,
+    ...history.slice(-10).reverse().map((item) => item.content),
+  ];
+
+  for (const source of candidates) {
+    const lines = source.split(/\\r?\\n/);
+    const topics: BulkCurriculumTopic[] = [];
+    let currentYear: 12 | 13 | null = null;
+    let currentTopic: BulkCurriculumTopic | null = null;
+
+    for (const rawLine of lines) {
+      const line = rawLine.trim();
+      const yearMatch = line.match(/\\bYear\\s*(12|13)\\b/i);
+      if (yearMatch) currentYear = Number(yearMatch[1]) as 12 | 13;
+
+      const topicMatch = line.match(/^\\*{0,2}\\s*Topic\\s*(\\d+)\\s*:\\s*(.+?)\\s*\\*{0,2}$/i);
+      if (topicMatch) {
+        if (currentTopic) topics.push(currentTopic);
+        const number = Number(topicMatch[1]);
+        const inferredYear = currentYear ?? (number <= 4 ? 12 : 13);
+        currentTopic = {
+          name: topicMatch[2].replace(/\\*{1,2}/g, '').trim(),
+          year: inferredYear,
+          subtopics: [],
+        };
+        continue;
+      }
+
+      if (currentTopic && /^[-*]\\s+/.test(line)) {
+        const subtopic = line.replace(/^[-*]\\s+/, '').replace(/\\*{1,2}/g, '').trim();
+        if (!subtopic || /\\b(required\\s+practical|practical|experiment|investigation)\\b/i.test(subtopic)) continue;
+        if (!currentTopic.subtopics.some((item) => item.toLowerCase() === subtopic.toLowerCase())) {
+          currentTopic.subtopics.push(subtopic);
+        }
+      }
+    }
+    if (currentTopic) topics.push(currentTopic);
+
+    const validTopics = topics.filter((topic) => topic.name && topic.subtopics.length > 0);
+    if (validTopics.length >= 2 && (asksToAdd || validTopics.length >= 8)) {
+      return { subject_name: biology.name, topics: validTopics };
+    }
+  }
+
+  return null;
+}
+
 async function executeAgentAction(
   action: StudyAgentAction,
   data: ReturnType<typeof useUserData>,
@@ -476,6 +543,139 @@ async function executeAgentAction(
 
   try {
     switch (action.type) {
+      case 'create_topics_bulk': {
+        const subjectName = getText('subject_name');
+        const rawTopics = p.topics;
+        if (!subjectName || !Array.isArray(rawTopics) || rawTopics.length === 0 || rawTopics.length > 30) {
+          return failed('A subject and a valid list of up to 30 topics are required. No changes were made.');
+        }
+
+        const { data: subjectRows, error: subjectError } = await supabase
+          .from('subjects').select('id, name').eq('user_id', userId);
+        if (subjectError) return failed('I could not check your subjects, so no curriculum entries were added.');
+        const subject = (subjectRows ?? []).find((item) => item.name.trim().toLowerCase() === subjectName.toLowerCase());
+        if (!subject) return failed('I could not find the subject "' + subjectName + '". No curriculum entries were added.');
+
+        const parsedTopics = rawTopics.map((item) => {
+          const row = item as Record<string, unknown>;
+          const year = Number(row.year);
+          const subtopics = Array.isArray(row.subtopics)
+            ? row.subtopics.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean)
+            : [];
+          return {
+            name: typeof row.name === 'string' ? row.name.trim() : '',
+            year: year === 13 ? 13 : 12,
+            subtopics: [...new Set(subtopics)],
+          };
+        }).filter((item) => item.name && item.subtopics.length > 0);
+
+        if (parsedTopics.length === 0) return failed('The curriculum list did not contain valid topics and subtopics. Nothing was added.');
+        const totalRequested = parsedTopics.reduce((sum, topic) => sum + 1 + topic.subtopics.length, 0);
+        if (totalRequested > 600) return failed('This curriculum is too large for one import. Please split it into smaller sections.');
+
+        const { data: existingRows, error: existingError } = await supabase
+          .from('topics').select('id, name, parent_id, position').eq('subject_id', subject.id);
+        if (existingError) return failed('I could not check existing Biology topics, so I stopped without adding anything.');
+
+        const existing = existingRows ?? [];
+        const rootByName = new Map(existing.filter((row) => !row.parent_id).map((row) => [row.name.trim().toLowerCase(), row]));
+        let nextRootPosition = existing.filter((row) => !row.parent_id).reduce(
+          (max, row) => Math.max(max, Number(row.position ?? -1)), -1
+        ) + 1;
+        const rootsToCreate = parsedTopics.filter((topic) => !rootByName.has(topic.name.toLowerCase()));
+        let rootsCreated = 0;
+        let childrenCreated = 0;
+
+        if (rootsToCreate.length > 0) {
+          const rootRows = rootsToCreate.map((topic) => ({
+            subject_id: subject.id,
+            parent_id: null,
+            name: topic.name,
+            description: 'AQA A-level Biology (7402) · Year ' + topic.year,
+            position: nextRootPosition++,
+            is_difficult: false,
+          }));
+          const { data: insertedRoots, error: rootInsertError } = await supabase
+            .from('topics').insert(rootRows).select('id, name, parent_id');
+          if (rootInsertError || !insertedRoots) {
+            console.error('Bulk curriculum parent-topic insert failed:', rootInsertError);
+            return failed('I could not save the main Biology topics. The database rejected the batch, so no subtopics were attempted.');
+          }
+          rootsCreated = insertedRoots.length;
+          insertedRoots.forEach((row) => rootByName.set(row.name.trim().toLowerCase(), row));
+        }
+
+        const childRows: { subject_id: string; parent_id: string; name: string; description: string | null; position: number; is_difficult: boolean }[] = [];
+        let skippedDuplicates = parsedTopics.length - rootsToCreate.length;
+        for (const topic of parsedTopics) {
+          const parent = rootByName.get(topic.name.toLowerCase());
+          if (!parent) continue;
+          const siblings = existing.filter((row) => row.parent_id === parent.id);
+          const existingNames = new Set(siblings.map((row) => row.name.trim().toLowerCase()));
+          let position = siblings.reduce((max, row) => Math.max(max, Number(row.position ?? -1)), -1) + 1;
+          for (const subtopic of topic.subtopics) {
+            if (existingNames.has(subtopic.toLowerCase())) {
+              skippedDuplicates += 1;
+              continue;
+            }
+            existingNames.add(subtopic.toLowerCase());
+            childRows.push({
+              subject_id: subject.id,
+              parent_id: parent.id,
+              name: subtopic,
+              description: null,
+              position: position++,
+              is_difficult: false,
+            });
+          }
+        }
+
+        for (let offset = 0; offset < childRows.length; offset += 100) {
+          const batch = childRows.slice(offset, offset + 100);
+          const { data: insertedChildren, error: childInsertError } = await supabase
+            .from('topics').insert(batch).select('id');
+          if (childInsertError || !insertedChildren) {
+            console.error('Bulk curriculum subtopic insert failed:', childInsertError);
+            const { data: verifyAfterFailure } = await supabase
+              .from('topics').select('id, parent_id').eq('subject_id', subject.id);
+            const savedChildCount = (verifyAfterFailure ?? []).filter((row) =>
+              childRows.some((child) => child.parent_id === row.parent_id)
+            ).length;
+            return failed('Partially saved: ' + rootsCreated + ' main topics were created. A subtopic batch failed, so I stopped. Please refresh and check before retrying.');
+          }
+          childrenCreated += insertedChildren.length;
+        }
+
+        const { data: verifiedRows, error: verifyError } = await supabase
+          .from('topics').select('id, name, parent_id').eq('subject_id', subject.id);
+        if (verifyError || !verifiedRows) {
+          return failed('The save requests completed, but I could not verify the final database contents. Please refresh before retrying.');
+        }
+
+        const verifiedRoots = new Map(verifiedRows.filter((row) => !row.parent_id).map((row) => [row.name.trim().toLowerCase(), row]));
+        const missing: string[] = [];
+        for (const topic of parsedTopics) {
+          const parent = verifiedRoots.get(topic.name.toLowerCase());
+          if (!parent) {
+            missing.push(topic.name);
+            continue;
+          }
+          const savedChildren = verifiedRows.filter((row) => row.parent_id === parent.id).map((row) => row.name.trim().toLowerCase());
+          for (const child of topic.subtopics) {
+            if (!savedChildren.includes(child.toLowerCase())) missing.push(topic.name + ' / ' + child);
+          }
+        }
+
+        if (missing.length > 0) {
+          return failed('Database verification found ' + missing.length + ' missing entries. The import is incomplete; first missing entry: ' + missing[0] + '.');
+        }
+        return {
+          success: true,
+          summary: 'Verified in the database: added ' + rootsCreated + ' main topics and ' + childrenCreated +
+            ' subtopics to ' + subject.name + '. Existing entries were kept; duplicates were skipped (' + skippedDuplicates + ').',
+        };
+      }
+
       case 'create_subject': {
         const name = getText('name');
         if (!name) return failed('A subject name is required.');
