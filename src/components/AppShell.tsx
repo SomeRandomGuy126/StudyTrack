@@ -263,7 +263,7 @@ export function AppShell() {
                   <p className="px-4 py-3 text-sm text-secondary">No matching subjects, topics, tasks, notes, flashcards or events.</p>
                 )}
               </div>
-            )
+            )}
           </div>
 
           <div className="flex items-center gap-2">
