@@ -30,11 +30,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .select('*')
       .eq('id', userId)
       .maybeSingle();
+
     if (error) {
       console.error('Profile load error', error);
       return;
     }
-    setProfile(data as Profile | null);
+
+    if (data) {
+      setProfile(data as Profile);
+      return;
+    }
+
+    // Older accounts may not have a profile row yet. Create one so the
+    // onboarding flow can run instead of sending the user straight to the app.
+    const { data: created, error: createError } = await supabase
+      .from('profiles')
+      .insert({ id: userId, display_name: 'Student' })
+      .select('*')
+      .single();
+
+    if (!createError && created) {
+      setProfile(created as Profile);
+      return;
+    }
+
+    // Another auth event may have created the row at the same time.
+    const { data: existing, error: reloadError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (reloadError) {
+      console.error('Profile reload error', reloadError);
+      return;
+    }
+    if (createError && !existing) {
+      console.error('Profile creation error', createError);
+    }
+    setProfile(existing as Profile | null);
   };
 
   useEffect(() => {
