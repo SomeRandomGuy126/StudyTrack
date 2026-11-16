@@ -464,40 +464,40 @@ function extractBulkCurriculumRequest(
   const biology = subjects.find((subject) => subject.name.trim().toLowerCase() === 'biology');
   if (!biology) return null;
 
-  const asksToAdd = /\\b(add|import|populate|create|put)\\b/i.test(message) &&
-    /\\b(curriculum|topics|biology|syllabus|list)\\b/i.test(message);
+  const asksToAdd = /\b(add|import|populate|create|put)\b/i.test(message) &&
+    /\b(curriculum|topics|biology|syllabus|list)\b/i.test(message);
   const candidates = [
     message,
     ...history.slice(-10).reverse().map((item) => item.content),
   ];
 
   for (const source of candidates) {
-    const lines = source.split(/\\r?\\n/);
+    const lines = source.split(/\r?\n/);
     const topics: BulkCurriculumTopic[] = [];
     let currentYear: 12 | 13 | null = null;
     let currentTopic: BulkCurriculumTopic | null = null;
 
     for (const rawLine of lines) {
       const line = rawLine.trim();
-      const yearMatch = line.match(/\\bYear\\s*(12|13)\\b/i);
+      const yearMatch = line.match(/\bYear\s*(12|13)\b/i);
       if (yearMatch) currentYear = Number(yearMatch[1]) as 12 | 13;
 
-      const topicMatch = line.match(/^\\*{0,2}\\s*Topic\\s*(\\d+)\\s*:\\s*(.+?)\\s*\\*{0,2}$/i);
+      const topicMatch = line.match(/^\*{0,2}\s*Topic\s*(\d+)\s*:\s*(.+?)\s*\*{0,2}$/i);
       if (topicMatch) {
         if (currentTopic) topics.push(currentTopic);
         const number = Number(topicMatch[1]);
         const inferredYear = currentYear ?? (number <= 4 ? 12 : 13);
         currentTopic = {
-          name: topicMatch[2].replace(/\\*{1,2}/g, '').trim(),
+          name: topicMatch[2].replace(/\*{1,2}/g, '').trim(),
           year: inferredYear,
           subtopics: [],
         };
         continue;
       }
 
-      if (currentTopic && /^[-*]\\s+/.test(line)) {
-        const subtopic = line.replace(/^[-*]\\s+/, '').replace(/\\*{1,2}/g, '').trim();
-        if (!subtopic || /\\b(required\\s+practical|practical|experiment|investigation)\\b/i.test(subtopic)) continue;
+      if (currentTopic && /^[-*]\s+/.test(line)) {
+        const subtopic = line.replace(/^[-*]\s+/, '').replace(/\*{1,2}/g, '').trim();
+        if (!subtopic || /\b(required\s+practical|practical|experiment|investigation)\b/i.test(subtopic)) continue;
         if (!currentTopic.subtopics.some((item) => item.toLowerCase() === subtopic.toLowerCase())) {
           currentTopic.subtopics.push(subtopic);
         }
@@ -505,9 +505,12 @@ function extractBulkCurriculumRequest(
     }
     if (currentTopic) topics.push(currentTopic);
 
-    const validTopics = topics.filter((topic) => topic.name && topic.subtopics.length > 0);
-    if (validTopics.length >= 2 && (asksToAdd || validTopics.length >= 8)) {
-      return { subject_name: biology.name, topics: validTopics };
+    const uniqueTopics = [...new Map(
+      topics.filter((topic) => topic.name && topic.subtopics.length > 0)
+        .map((topic) => [topic.name.toLowerCase(), topic])
+    ).values()];
+    if (uniqueTopics.length >= 2 && (asksToAdd || uniqueTopics.length >= 8)) {
+      return { subject_name: biology.name, topics: uniqueTopics };
     }
   }
 
@@ -596,7 +599,7 @@ async function executeAgentAction(
             is_difficult: false,
           }));
           const { data: insertedRoots, error: rootInsertError } = await supabase
-            .from('topics').insert(rootRows).select('id, name, parent_id');
+            .from('topics').insert(rootRows).select('id, name, parent_id, position');
           if (rootInsertError || !insertedRoots) {
             console.error('Bulk curriculum parent-topic insert failed:', rootInsertError);
             return failed('I could not save the main Biology topics. The database rejected the batch, so no subtopics were attempted.');
