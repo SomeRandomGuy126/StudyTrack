@@ -358,7 +358,11 @@ function buildAppContext(data: ReturnType<typeof useUserData>): string {
   const lines: string[] = [];
   lines.push(`Subjects: ${data.subjects.map((s) => s.name).join(', ') || 'none yet'}.`);
   if (data.topics.length) {
-    lines.push(`Topics studied recently: ${data.topics.slice(0, 10).map((t) => `${t.name} (${data.subjects.find((s) => s.id === t.subject_id)?.name ?? '?'})`).join(', ')}.`);
+    lines.push(`Topics and subtopics: ${data.topics.slice(0, 30).map((t) => {
+      const subjectName = data.subjects.find((subject) => subject.id === t.subject_id)?.name ?? '?';
+      const parentName = t.parent_id ? data.topics.find((parent) => parent.id === t.parent_id)?.name : null;
+      return parentName ? `${t.name} (subtopic of ${parentName}, ${subjectName})` : `${t.name} (${subjectName})`;
+    }).join('; ')}.`);
   }
   lines.push(`Total study time logged: ${formatDuration(totalMinutes)} across ${data.studySessions.length} sessions.`);
   lines.push(`Overdue revisions: ${overdue.length}${overdue.length ? ` (${overdue.slice(0, 5).map((r) => `${r.topic?.name} — ${relativeDate(r.next_due_date)}`).join('; ')})` : ''}.`);
@@ -587,8 +591,10 @@ async function executeAgentAction(
         const { data: parent, error: parentError } = await supabase
           .from('topics').select('id, name, position').eq('subject_id', subject.id);
         if (parentError) return failed('I could not check the parent topic, so no subtopic was added.');
-        const parentTopic = (parent ?? []).find(t => t.name.trim().toLowerCase() === parentName.toLowerCase());
-        if (!parentTopic) return failed('I could not find the parent topic "' + parentName + '" in ' + subject.name + '.');
+        const parentMatches = (parent ?? []).filter(t => t.name.trim().toLowerCase() === parentName.toLowerCase());
+        if (parentMatches.length === 0) return failed('I could not find the parent topic "' + parentName + '" in ' + subject.name + '.');
+        if (parentMatches.length > 1) return failed('There is more than one topic called "' + parentName + '" in ' + subject.name + '. Please specify which one.');
+        const parentTopic = parentMatches[0];
         const { data: siblings, error: siblingsError } = await supabase
           .from('topics').select('id, name, position').eq('subject_id', subject.id).eq('parent_id', parentTopic.id);
         if (siblingsError) return failed('I could not check existing subtopics, so nothing was added.');
