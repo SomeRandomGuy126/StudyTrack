@@ -291,19 +291,16 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
 
   const handleSave = async () => {
     setSaving(true);
-    if (subject) {
-      await supabase.from('subjects').update({
-        name, color, exam_board: examBoard || null, qualification_level: qualificationLevel || null,
-        teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean),
-      }).eq('id', subject.id);
-    } else {
-      await supabase.from('subjects').insert({
-        user_id: userId, name, color, exam_board: examBoard || null,
-        qualification_level: qualificationLevel || null, teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean), position,
-      });
-    }
+    const payload = {
+      name: name.trim(), color, exam_board: examBoard || null,
+      qualification_level: qualificationLevel || null,
+      teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean),
+    };
+    const result = subject
+      ? await supabase.from('subjects').update(payload).eq('id', subject.id)
+      : await supabase.from('subjects').insert({ ...payload, user_id: userId, position });
     setSaving(false);
-    onSaved();
+    if (!result.error) onSaved();
   };
 
   return (
@@ -317,12 +314,9 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
           <label className="block text-sm font-medium text-secondary mb-2">Colour</label>
           <div className="flex flex-wrap gap-2">
             {SUBJECT_COLORS.map((c) => (
-              <button
-                key={c}
-                onClick={() => setColor(c)}
+              <button key={c} type="button" onClick={() => setColor(c)}
                 className={`w-8 h-8 rounded-lg transition-all ${color === c ? 'ring-2 ring-offset-2 ring-brand-500 scale-110' : ''}`}
-                style={{ backgroundColor: c }}
-              />
+                style={{ backgroundColor: c }} />
             ))}
           </div>
         </div>
@@ -335,12 +329,8 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
             <label className="block text-sm font-medium text-secondary mb-1.5">Qualification</label>
             <select className="input" value={qualificationLevel} onChange={(e) => setQualificationLevel(e.target.value)}>
               <option value="">Select qualification...</option>
-              {qualificationLevel && !EDUCATION_LEVELS.includes(qualificationLevel) && (
-                <option value={qualificationLevel}>{qualificationLevel}</option>
-              )}
-              {EDUCATION_LEVELS.map((level) => (
-                <option key={level} value={level}>{level}</option>
-              ))}
+              {qualificationLevel && !EDUCATION_LEVELS.includes(qualificationLevel) && <option value={qualificationLevel}>{qualificationLevel}</option>}
+              {EDUCATION_LEVELS.map((level) => <option key={level} value={level}>{level}</option>)}
             </select>
           </div>
         </div>
@@ -377,28 +367,27 @@ function TopicModal({ topic, subjectId, parentId, position, teacherNames, onClos
 
   const handleSave = async () => {
     setSaving(true);
-    if (topic) {
-      await supabase.from('topics').update({ name, description: description || null, is_difficult: isDifficult, teacher_name: teacherName || null }).eq('id', topic.id);
-    } else {
-      await supabase.from('topics').insert({
-        subject_id: subjectId, parent_id: parentId, name,
-        description: description || null, is_difficult: isDifficult, teacher_name: teacherName || null, position,
-      });
-    }
+    const payload = {
+      name: name.trim(), description: description || null,
+      is_difficult: isDifficult, teacher_name: teacherName || null,
+    };
+    const result = topic
+      ? await supabase.from('topics').update(payload).eq('id', topic.id)
+      : await supabase.from('topics').insert({ ...payload, subject_id: subjectId, parent_id: parentId, position });
     setSaving(false);
-    onSaved();
+    if (!result.error) onSaved();
   };
 
   return (
-    <Modal open onClose={onClose} title={topic ? 'Edit topic' : 'New topic'} size="sm">
+    <Modal open onClose={onClose} title={topic ? 'Edit topic' : parentId ? 'New subtopic' : 'New topic'} size="sm">
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-secondary mb-1.5">Topic name</label>
+          <label className="block text-sm font-medium text-secondary mb-1.5">{parentId ? 'Subtopic' : 'Topic'} name</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Cell structure" autoFocus />
         </div>
         <div>
           <label className="block text-sm font-medium text-secondary mb-1.5">Description (optional)</label>
-          <textarea className="input min-h-[80px]" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of what this topic covers" />
+          <textarea className="input min-h-[80px]" value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Brief description of what this covers" />
         </div>
         <div>
           <label className="block text-sm font-medium text-secondary mb-1.5">Teacher (optional)</label>
