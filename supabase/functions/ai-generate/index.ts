@@ -232,14 +232,28 @@ Deno.serve(async (req) => {
             model,
             messages,
             temperature,
-            max_tokens: 1600,
-            ...(body.task === "agent" ? { response_format: { type: "json_object" } } : {}),
+            max_tokens: 2400,
+            ...(provider.label === "Groq" && model.startsWith("openai/gpt-oss-")
+              ? { reasoning_effort: "low" }
+              : {}),
+            ...(["agent", "flashcards", "import", "youtube", "notes", "quiz"].includes(body.task)
+              ? { response_format: { type: "json_object" } }
+              : {}),
           }),
         });
 
         if (providerRes.ok) {
           const providerData = await providerRes.json();
-          text = providerData.choices?.[0]?.message?.content ?? "";
+          const choice = providerData.choices?.[0];
+          const messageContent = choice?.message?.content;
+          text = typeof messageContent === "string"
+            ? messageContent.trim()
+            : Array.isArray(messageContent)
+              ? messageContent.map((part: { text?: string }) => part?.text ?? "").join("").trim()
+              : "";
+          if (!text && choice?.finish_reason === "length") {
+            lastError = "The AI response ran out of space. Please try a shorter request.";
+          }
           break;
         }
 
