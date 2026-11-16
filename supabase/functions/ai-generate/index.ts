@@ -193,13 +193,13 @@ Deno.serve(async (req) => {
 
     const systemPrompt = SYSTEM_PROMPTS[body.task] ?? SYSTEM_PROMPTS.tutor;
     const prefs = await loadUserPrefs(supabase, userData.user.id);
-    const styleDirective = `\\n\\nStyle: use a ${prefs.tone} tone and ${prefs.depth} depth of explanation.`;
+    const styleDirective = `\n\nStyle: use a ${prefs.tone} tone and ${prefs.depth} depth of explanation.`;
     const appContext = typeof body.options?.context === "string"
       ? body.options.context.slice(0, 4000)
       : "";
     const systemContent = systemPrompt + styleDirective +
       (body.task === "agent" && appContext
-        ? `\\n\\nStudent's app context:\\n${appContext}`
+        ? `\n\nStudent's app context:\n${appContext}`
         : "");
     const requestMessages = body.messages ?? [];
     // Agent requests already include the current user message in requestMessages.
