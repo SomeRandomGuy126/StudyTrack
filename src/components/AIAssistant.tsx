@@ -221,7 +221,7 @@ try {
         {/* Header */}
         <div className="flex items-center justify-between px-4 py-3 border-b border-app shrink-0">
           <div className="flex items-center gap-2">
-            <div className="w-9 h-9 bg-gradient-to-br from-brand-500 to-emerald-500 rounded-lg flex items-center justify-center text-white">
+            <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white" style={{ background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' }}>
               <Bot size={20} />
             </div>
             <div>
@@ -251,9 +251,12 @@ try {
           {messages.map((msg) => (
             <div key={msg.id} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
               <div className={`flex gap-2 max-w-[85%] ${msg.role === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-1 ${
-                  msg.role === 'user' ? 'bg-brand-100 text-brand-700' : 'bg-gradient-to-br from-brand-500 to-emerald-500 text-white'
-                }`}>
+                <div
+                  className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center mt-1 ${
+                    msg.role === 'user' ? 'bg-brand-100 text-brand-700' : 'text-white'
+                  }`}
+                  style={msg.role === 'assistant' ? { background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' } : undefined}
+                >
                   {msg.role === 'user' ? <User size={14} /> : <Bot size={14} />}
                 </div>
                 <div
