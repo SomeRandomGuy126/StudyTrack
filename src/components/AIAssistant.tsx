@@ -92,7 +92,7 @@ export function AIAssistant({ open, onClose }: Props) {
     setLoading(true);
 
     const tempUserMsg: AiMessage = {
-      id: 'temp-user',
+      id: crypto.randomUUID(),
       user_id: user!.id,
       role: 'user',
       content: userMessage,
@@ -167,7 +167,7 @@ try {
 }
 
     const assistantMsg: AiMessage = {
-      id: 'temp-assistant',
+      id: crypto.randomUUID(),
       user_id: user!.id,
       role: 'assistant',
       content: response,
