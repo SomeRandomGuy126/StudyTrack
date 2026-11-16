@@ -41,7 +41,8 @@ function readStoredValue<T extends string>(key: string, allowed: readonly T[], f
 }
 
 function getSystemTheme(): Theme {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+  const media = window.matchMedia?.('(prefers-color-scheme: dark)');
+  return media?.matches ? 'dark' : 'light';
 }
 
 function toRgb(hex: string): [number, number, number] {
