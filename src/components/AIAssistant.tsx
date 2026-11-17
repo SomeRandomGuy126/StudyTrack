@@ -24,6 +24,7 @@ export function AIAssistant({ open, onClose }: Props) {
   const [fullscreen, setFullscreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLTextAreaElement>(null);
   const data = useUserData();
 
   useEffect(() => {
@@ -38,6 +39,16 @@ export function AIAssistant({ open, onClose }: Props) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages, loading, error]);
+
+  // Grow the message box as the student types, up to 160px.
+  useEffect(() => {
+    const textarea = inputRef.current;
+    if (!textarea) return;
+    textarea.style.height = '44px';
+    const nextHeight = Math.min(textarea.scrollHeight, 160);
+    textarea.style.height = `${nextHeight}px`;
+    textarea.style.overflowY = textarea.scrollHeight > 160 ? 'auto' : 'hidden';
+  }, [input]);
 
   // Esc closes fullscreen first, then the panel.
   useEffect(() => {
@@ -341,7 +352,8 @@ export function AIAssistant({ open, onClose }: Props) {
         <div className={`px-4 py-3 border-t border-app shrink-0 ${fullscreen ? 'mx-auto w-full max-w-3xl' : ''}`}>
           <div className="flex items-end gap-2">
             <textarea
-              className="input min-h-[44px] max-h-32 resize-none"
+              ref={inputRef}
+              className="input min-h-[44px] max-h-40 resize-none overflow-y-hidden"
               placeholder="Ask me anything..."
               value={input}
               onChange={(e) => setInput(e.target.value)}
