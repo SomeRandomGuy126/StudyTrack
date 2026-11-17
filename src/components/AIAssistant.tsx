@@ -165,32 +165,37 @@ export function AIAssistant({ open, onClose }: Props) {
       // Handle a specifically targeted parent topic before curriculum imports.
       // Otherwise an older curriculum list in chat history can be mistaken for
       // the current request and bypass the existing-topic confirmation.
-      const nestedSubtopicRequest = extractNestedSubtopicRequest(
+      const nestedSubtopicBatchRequest = extractNestedSubtopicBatchRequest(
         userMessage, data.topics, data.subjects
       );
+      const nestedSubtopicRequest = nestedSubtopicBatchRequest
+        ? null
+        : extractNestedSubtopicRequest(userMessage, data.topics, data.subjects);
       const namedSubtopicsRequest = nestedSubtopicRequest
         ? null
         : extractNamedSubtopicsRequest(userMessage, data.topics, data.subjects);
-      const generatedSubtopicsRequest = nestedSubtopicRequest || namedSubtopicsRequest
+      const generatedSubtopicsRequest = nestedSubtopicBatchRequest || nestedSubtopicRequest || namedSubtopicsRequest
         ? null
         : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
-      const subtopicsBulkRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest
+      const subtopicsBulkRequest = nestedSubtopicBatchRequest || nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest
         ? null
         : extractSubtopicsBulkRequest(userMessage, data.subjects);
-      const subtopicRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest
+      const subtopicRequest = nestedSubtopicBatchRequest || nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
       // A direct request to create one topic must take priority over curriculum
       // imports inferred from earlier chat history. Otherwise an old syllabus
       // list can hijack a simple request such as "Create a new topic called X in Biology".
-      const topicRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
+      const topicRequest = nestedSubtopicBatchRequest || nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
-      const bulkRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
+      const bulkRequest = nestedSubtopicBatchRequest || nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
         ? null
         : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
       const bulkAction = generatedSubtopicsRequest ?? subtopicsBulkRequest ?? bulkRequest;
-      const directRequest = nestedSubtopicRequest
+      const directRequest = nestedSubtopicBatchRequest
+        ? null
+        : nestedSubtopicRequest
         ? { type: 'create_subtopic', payload: nestedSubtopicRequest }
         : namedSubtopicsRequest
           ? { type: 'create_subtopics_bulk', payload: namedSubtopicsRequest }
@@ -201,7 +206,26 @@ export function AIAssistant({ open, onClose }: Props) {
             : topicRequest
               ? { type: 'create_topic', payload: topicRequest }
               : null;
-      if (directRequest) {
+      if (nestedSubtopicBatchRequest) {
+        const results: string[] = [];
+        let allSucceeded = true;
+        for (const payload of nestedSubtopicBatchRequest) {
+          const execution = await executeAgentAction({
+            type: 'create_subtopic',
+            payload,
+          }, data, user!.id);
+          results.push(execution.summary);
+          if (!execution.success) {
+            allSucceeded = false;
+            break;
+          }
+        }
+        response = results.join('\\n\\n');
+        if (allSucceeded && results.length === nestedSubtopicBatchRequest.length) {
+          action = results.join(' ');
+        }
+        await data.refresh();
+      } else if (directRequest) {
         const singleBulkTopic = bulkAction?.topics.length === 1 ? bulkAction.topics[0] : null;
         if (bulkAction && singleBulkTopic && singleBulkTopic.subtopics.length > 0) {
           const subject = data.subjects.find(
@@ -667,6 +691,35 @@ function extractCreateTopicRequest(
   }
 
   return null;
+}
+
+function extractNestedSubtopicBatchRequest(
+  message: string,
+  topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
+  subjects: { id: string; name: string }[]
+): { name: string; parent_topic_name: string; subject_name: string }[] | null {
+  const lines = message.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+  if (lines.length < 2 || lines.length > 30) return null;
+
+  // A pasted batch is a list of independent nested-subtopic commands.
+  // Parse and validate every line before writing anything to the database.
+  const requests = lines.map((line) => extractNestedSubtopicRequest(line, topics, subjects));
+  if (requests.some((request) => request === null)) return null;
+
+  const typedRequests = requests as {
+    name: string;
+    parent_topic_name: string;
+    subject_name: string;
+  }[];
+  const uniqueNames = new Set(
+    typedRequests.map((request) =>
+      request.subject_name.toLowerCase() + '::' +
+      request.parent_topic_name.toLowerCase() + '::' +
+      request.name.toLowerCase()
+    )
+  );
+  if (uniqueNames.size !== typedRequests.length) return null;
+  return typedRequests;
 }
 
 function extractNestedSubtopicRequest(
