@@ -350,7 +350,7 @@ export function AIAssistant({ open, onClose }: Props) {
   ];
 
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (fullscreen || event.button !== 0 || (event.target as HTMLElement).closest('button, input, textarea, a')) return;
+    if (fullscreen || !event.isPrimary || event.button !== 0 || (event.target as HTMLElement).closest('button, input, textarea, a')) return;
     const panel = event.currentTarget.parentElement as HTMLDivElement | null;
     if (!panel) return;
     const rect = panel.getBoundingClientRect();
@@ -362,7 +362,7 @@ export function AIAssistant({ open, onClose }: Props) {
   };
   const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
     const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || !drag.panel) return;
+    if (!drag || drag.pointerId !== event.pointerId || !drag.panel || (event.buttons & 1) !== 1) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
     // Move the panel directly during the gesture. Avoid a React render for every pointer event.
@@ -390,14 +390,14 @@ export function AIAssistant({ open, onClose }: Props) {
   const floatingStyle: React.CSSProperties = fullscreen ? {
     left: 0, top: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh',
     minWidth: 0, minHeight: 0, maxWidth: '100vw', maxHeight: '100dvh',
-    resize: 'none', borderRadius: 0,
+    resize: 'none', borderRadius: 0, backgroundColor: 'var(--bg-secondary)', backgroundImage: 'none',
   } : {
     left: floatingPosition?.x, top: floatingPosition?.y,
     right: floatingPosition ? 'auto' : 24, bottom: floatingPosition ? 'auto' : 24,
     width: 'min(440px, calc(100vw - 16px))',
     height: minimized ? 'auto' : 'min(600px, calc(100vh - 48px))',
-    minWidth: 'min(320px, calc(100vw - 16px))', minHeight: minimized ? 'auto' : 260,
-    maxWidth: 'calc(100vw - 16px)', maxHeight: 'calc(100vh - 16px)',
+    minWidth: 'min(320px, calc(100vw - 16px))', minHeight: minimized ? 'auto' : 300,
+    maxWidth: 'min(900px, calc(100vw - 16px))', maxHeight: 'min(900px, calc(100vh - 16px))',
     resize: minimized ? 'none' : 'both', overflow: 'hidden',
   };
 
