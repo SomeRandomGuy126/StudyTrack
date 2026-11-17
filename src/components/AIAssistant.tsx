@@ -626,19 +626,26 @@ function extractNamedSubtopicsRequest(
   subjects: { id: string; name: string }[]
 ): { subject_name: string; parent_topic_name: string; subtopics: string[] } | null {
   const text = message.trim();
-  if (!/^(?:please\\s+)?add\\s+these\\s+subtopics\\b/i.test(text)) return null;
-  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
-    .map((match) => (match[1] ?? match[2] ?? '').trim())
-    .filter(Boolean);
-  if (quoted.length < 2 || quoted.length > 31) return null;
-  const parentName = quoted[quoted.length - 1];
-  const subtopicNames = [...new Set(quoted.slice(0, -1))];
+  if (!/^(?:please\s+)?add\s+these\s+subtopics\b/i.test(text)) return null;
+  const separator = text.match(/\bto\b/i);
+  if (!separator || separator.index === undefined) return null;
+  const left = text.slice(0, separator.index);
+  const right = text.slice(separator.index + separator[0].length);
+  const subtopicNames = [...new Set(
+    [...left.matchAll(/"([^"]+)"|'([^']+)'/g)]
+      .map((match) => (match[1] ?? match[2] ?? '').trim())
+      .filter(Boolean)
+  )];
+  const parentMatch = right.match(/"([^"]+)"|'([^']+)'/);
+  const parentName = (parentMatch?.[1] ?? parentMatch?.[2] ??
+    right.replace(/^\s*(?:(?:the\s+)?topic\s+)/i, '').trim()).trim();
+  if (subtopicNames.length === 0 || subtopicNames.length > 30 || !parentName) return null;
   const parentMatches = topics.filter((topic) =>
     !topic.parent_id && topic.name.trim().toLowerCase() === parentName.toLowerCase()
   );
   if (parentMatches.length !== 1) return null;
   const subject = subjects.find((item) => item.id === parentMatches[0].subject_id);
-  if (!subject || subtopicNames.length === 0) return null;
+  if (!subject) return null;
   return { subject_name: subject.name, parent_topic_name: parentMatches[0].name, subtopics: subtopicNames };
 }
 
