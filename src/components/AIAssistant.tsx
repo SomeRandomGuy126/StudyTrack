@@ -349,37 +349,57 @@ export function AIAssistant({ open, onClose }: Props) {
     "Add a Biology study session",
   ];
 
-  const panelSize = fullscreen ? 'fixed inset-0 z-50 w-full h-full' : 'fixed z-50 flex flex-col rounded-2xl border border-app shadow-2xl surface';
   const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (fullscreen || (event.target as HTMLElement).closest('button')) return;
-    const rect = event.currentTarget.parentElement?.getBoundingClientRect();
-    if (!rect) return;
-    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top };
+    if (fullscreen || event.button !== 0 || (event.target as HTMLElement).closest('button, input, textarea, a')) return;
+    const panel = event.currentTarget.parentElement as HTMLDivElement | null;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    dragRef.current = {
+      pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
+      originX: rect.left, originY: rect.top, panel,
+    } as typeof dragRef.current;
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current;
-    if (!drag || drag.pointerId !== event.pointerId) return;
-    const rect = event.currentTarget.parentElement?.getBoundingClientRect();
-    const width = rect?.width ?? 440, height = rect?.height ?? 600;
-    setFloatingPosition({
-      x: Math.max(8, Math.min(window.innerWidth - width - 8, drag.originX + event.clientX - drag.startX)),
-      y: Math.max(8, Math.min(window.innerHeight - Math.min(height, 120) - 8, drag.originY + event.clientY - drag.startY)),
-    });
+    const drag = dragRef.current as (NonNullable<typeof dragRef.current> & { panel?: HTMLDivElement }) | null;
+    if (!drag || drag.pointerId !== event.pointerId || !drag.panel) return;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    // Move the panel directly during the gesture. Avoid a React render for every pointer event.
+    drag.panel.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
   };
-  const handleDragEnd = () => { dragRef.current = null; };
-  const floatingStyle: React.CSSProperties = fullscreen ? {} : {
+  const handleDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current as (NonNullable<typeof dragRef.current> & { panel?: HTMLDivElement }) | null;
+    if (!drag || drag.pointerId !== event.pointerId || !drag.panel) return;
+    const panel = drag.panel;
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    const dx = event.clientX - drag.startX;
+    const dy = event.clientY - drag.startY;
+    const x = Math.max(8, Math.min(window.innerWidth - width - 8, drag.originX + dx));
+    const y = Math.max(8, Math.min(window.innerHeight - Math.min(height, 120) - 8, drag.originY + dy));
+    panel.style.transform = '';
+    dragRef.current = null;
+    setFloatingPosition({ x, y });
+  };
+  const floatingStyle: React.CSSProperties = fullscreen ? {
+    left: 0, top: 0, right: 0, bottom: 0, width: '100vw', height: '100dvh',
+    minWidth: 0, minHeight: 0, maxWidth: '100vw', maxHeight: '100dvh',
+    resize: 'none', borderRadius: 0,
+  } : {
     left: floatingPosition?.x, top: floatingPosition?.y,
     right: floatingPosition ? 'auto' : 24, bottom: floatingPosition ? 'auto' : 24,
-    width: 'min(440px, calc(100vw - 32px))',
-    height: minimized ? 'auto' : 'min(720px, calc(100vh - 48px))',
-    minHeight: minimized ? 'auto' : 280, resize: minimized ? 'none' : 'both', overflow: 'hidden',
+    width: 'min(440px, calc(100vw - 16px))',
+    height: minimized ? 'auto' : 'min(600px, calc(100vh - 48px))',
+    minWidth: 'min(320px, calc(100vw - 16px))', minHeight: minimized ? 'auto' : 260,
+    maxWidth: 'calc(100vw - 16px)', maxHeight: 'calc(100vh - 16px)',
+    resize: minimized ? 'none' : 'both', overflow: 'hidden',
   };
 
   return (
     <>
-      <div className={`${panelSize} transition-all duration-200 ${open ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
-        style={floatingStyle} aria-hidden={!open}>
+      <div className={`fixed z-50 flex flex-col border border-app shadow-2xl ${fullscreen ? '' : 'rounded-2xl'} ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
+        style={{ ...floatingStyle, backgroundColor: 'var(--bg-secondary)', boxShadow: '0 20px 70px rgb(0 0 0 / 0.24)', transition: 'opacity 140ms ease', willChange: 'left, top' }} aria-hidden={!open}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-app shrink-0 cursor-grab active:cursor-grabbing select-none"
           onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}
           onPointerCancel={handleDragEnd} style={{ touchAction: 'none' }}>
