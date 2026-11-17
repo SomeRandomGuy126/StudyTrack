@@ -404,7 +404,7 @@ export function AIAssistant({ open, onClose }: Props) {
   return (
     <>
       <div className={`fixed z-50 flex flex-col border border-app shadow-2xl ${fullscreen ? '' : 'rounded-2xl'} ${open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}`}
-        style={{ ...floatingStyle, backgroundColor: 'var(--bg-secondary)', boxShadow: '0 20px 70px rgb(0 0 0 / 0.24)', transition: 'opacity 140ms ease', willChange: 'left, top' }} aria-hidden={!open}>
+        style={{ ...floatingStyle, backgroundColor: 'var(--bg-secondary)', boxShadow: '0 20px 70px rgb(0 0 0 / 0.24)', transition: 'opacity 140ms ease', willChange: 'transform' }} aria-hidden={!open}>
         <div className="flex items-center justify-between px-4 py-3 border-b border-app shrink-0 cursor-grab active:cursor-grabbing select-none"
           onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}
           onPointerCancel={handleDragEnd} style={{ touchAction: 'none' }}>
