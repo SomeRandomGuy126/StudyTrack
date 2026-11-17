@@ -225,18 +225,22 @@ export function AIAssistant({ open, onClose }: Props) {
               const matches = (existingRows ?? [])
                 .filter((row) => !row.parent_id && normalizeTopicName(row.name) === requestedKey)
                 .map((row) => ({ id: row.id, name: row.name }));
-              if (matches.length > 0) {
-                setPendingTopicChoice({
-                  subjectName: subject.name,
-                  requestedTopicName: singleBulkTopic.name,
-                  subtopics: singleBulkTopic.subtopics,
-                  matches,
-                });
-                response = matches.length === 1
-                  ? 'I found an existing topic in Biology: "' + matches[0].name + '".\n\nDo you want me to add these subtopics to that existing topic, or create a new topic instead? Reply "existing" or "new".'
-                  : 'I found more than one existing topic that could match "' + singleBulkTopic.name + '":\n' +
-                    matches.map((item, index) => (index + 1) + '. ' + item.name).join('\n') +
-                    '\n\nReply with the number of the topic you want to use, or "new" to create a separate topic.';
+              if (matches.length === 1) {
+                // The user explicitly targeted this parent topic. Reuse it
+                // automatically instead of asking whether to create a duplicate.
+                const execution = await executeAgentAction({
+                  type: 'create_subtopics_bulk',
+                  payload: {
+                    subject_name: subject.name,
+                    parent_topic_name: matches[0].name,
+                    subtopics: singleBulkTopic.subtopics,
+                  },
+                }, data, user!.id);
+                response = execution.summary;
+                if (execution.success) action = execution.summary;
+                await data.refresh();
+              } else if (matches.length > 1) {
+                response = 'I found more than one matching parent topic in ' + subject.name + '. Please rename or remove the duplicate parent topics so I can safely add the subtopics to the correct one. No changes were made.';
               } else {
                 const execution = await executeAgentAction(directRequest, data, user!.id);
                 response = execution.summary;
