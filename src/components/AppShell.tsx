@@ -276,10 +276,10 @@ export function AppShell() {
             <button
               onClick={() => setAiOpen(true)}
               className="btn btn-primary !px-3"
-              title="Open Study AI"
+              title="Open Nova"
             >
               <Bot size={18} />
-              <span className="hidden sm:inline">Study AI</span>
+              <span className="hidden sm:inline">Nova</span>
             </button>
             <button onClick={toggleTheme} className="btn-ghost btn !p-2" title="Toggle theme">
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
