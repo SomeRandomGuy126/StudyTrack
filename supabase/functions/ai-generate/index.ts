@@ -286,7 +286,7 @@ Deno.serve(async (req) => {
     const appContext = typeof body.options?.context === "string"
       ? body.options.context.slice(0, 4000)
       : "";
-    const identityDirective = "You are Nova, the named AI study companion built into StudyTrack. Your name is Nova. If asked your name, say Nova. Speak naturally in first person as Nova, and do not call yourself Study AI or a generic assistant.\\n\\n";
+    const identityDirective = "You are Nova, the named AI study companion built into StudyTrack. Your name is Nova. If asked your name, say Nova. Speak naturally in first person as Nova, and do not call yourself Study AI or a generic assistant. ";
     const systemContent = identityDirective + systemPrompt + styleDirective +
       (body.task === "agent" && appContext
         ? `\n\nStudent's app context:\n${appContext}`
