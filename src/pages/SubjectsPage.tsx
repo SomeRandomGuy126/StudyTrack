@@ -288,19 +288,30 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
   const [qualificationLevel, setQualificationLevel] = useState(subject?.qualification_level ?? '');
   const [teacherNames, setTeacherNames] = useState((subject?.teacher_names ?? []).join(', '));
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const handleSave = async () => {
+    if (!name.trim() || saving) return;
     setSaving(true);
-    const payload = {
-      name: name.trim(), color, exam_board: examBoard || null,
-      qualification_level: qualificationLevel || null,
-      teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean),
-    };
-    const result = subject
-      ? await supabase.from('subjects').update(payload).eq('id', subject.id)
-      : await supabase.from('subjects').insert({ ...payload, user_id: userId, position });
-    setSaving(false);
-    if (!result.error) onSaved();
+    setSaveError('');
+    try {
+      const payload = {
+        name: name.trim(), color, exam_board: examBoard || null,
+        qualification_level: qualificationLevel || null,
+        teacher_names: teacherNames.split(',').map((v) => v.trim()).filter(Boolean),
+      };
+      const result = subject
+        ? await supabase.from('subjects').update(payload).eq('id', subject.id).select('id').maybeSingle()
+        : await supabase.from('subjects').insert({ ...payload, user_id: userId, position }).select('id').single();
+      if (result.error) throw result.error;
+      if (!result.data?.id) throw new Error('No subject was updated. Please refresh the page and try again.');
+      onSaved();
+    } catch (error) {
+      console.error('Failed to save subject:', error);
+      setSaveError(error instanceof Error ? error.message : 'Could not save this subject. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -339,9 +350,10 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
           <input className="input" value={teacherNames} onChange={(e) => setTeacherNames(e.target.value)} placeholder="e.g. Mrs Smith, Mr Jones" />
           <p className="text-xs text-tertiary mt-1">Separate multiple teachers with commas.</p>
         </div>
+        {saveError && <p role="alert" className="text-sm text-red-500">{saveError}</p>}
         <div className="flex gap-3 justify-end pt-2">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
+          <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button type="button" onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
@@ -364,18 +376,29 @@ function TopicModal({ topic, subjectId, parentId, position, teacherNames, onClos
   const [isDifficult, setIsDifficult] = useState(topic?.is_difficult ?? false);
   const [teacherName, setTeacherName] = useState(topic?.teacher_name ?? '');
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   const handleSave = async () => {
+    if (!name.trim() || saving) return;
     setSaving(true);
-    const payload = {
-      name: name.trim(), description: description || null,
-      is_difficult: isDifficult, teacher_name: teacherName || null,
-    };
-    const result = topic
-      ? await supabase.from('topics').update(payload).eq('id', topic.id)
-      : await supabase.from('topics').insert({ ...payload, subject_id: subjectId, parent_id: parentId, position });
-    setSaving(false);
-    if (!result.error) onSaved();
+    setSaveError('');
+    try {
+      const payload = {
+        name: name.trim(), description: description || null,
+        is_difficult: isDifficult, teacher_name: teacherName || null,
+      };
+      const result = topic
+        ? await supabase.from('topics').update(payload).eq('id', topic.id).select('id').maybeSingle()
+        : await supabase.from('topics').insert({ ...payload, subject_id: subjectId, parent_id: parentId, position }).select('id').single();
+      if (result.error) throw result.error;
+      if (!result.data?.id) throw new Error('No topic was updated. Please refresh the page and try again.');
+      onSaved();
+    } catch (error) {
+      console.error('Failed to save topic or subtopic:', error);
+      setSaveError(error instanceof Error ? error.message : 'Could not save this topic. Please try again.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -404,9 +427,10 @@ function TopicModal({ topic, subjectId, parentId, position, teacherNames, onClos
           <input type="checkbox" checked={isDifficult} onChange={(e) => setIsDifficult(e.target.checked)} className="rounded accent-brand-500" />
           <span className="text-sm text-secondary">Mark as difficult (revision will be scheduled sooner)</span>
         </label>
+        {saveError && <p role="alert" className="text-sm text-red-500">{saveError}</p>}
         <div className="flex gap-3 justify-end pt-2">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
+          <button type="button" onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button type="button" onClick={handleSave} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving...' : 'Save'}
           </button>
         </div>
