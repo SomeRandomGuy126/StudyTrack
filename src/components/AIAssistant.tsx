@@ -23,6 +23,12 @@ export function AIAssistant({ open, onClose }: Props) {
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingTopicChoice, setPendingTopicChoice] = useState<{
+    subjectName: string;
+    requestedTopicName: string;
+    subtopics: string[];
+    matches: { id: string; name: string }[];
+  } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const data = useUserData();
@@ -117,6 +123,40 @@ export function AIAssistant({ open, onClose }: Props) {
     let action: string | null = null;
 
     try {
+      if (pendingTopicChoice) {
+        const choiceText = userMessage.trim();
+        const isNew = /^(?:new|new topic|create new|make a new one)$/i.test(choiceText);
+        const numberedChoice = choiceText.match(/^(?:use\s+)?(?:option\s+)?([1-9]\d*)$/i);
+        const isExisting = /^(?:existing|use existing|existing topic|use the existing one)$/i.test(choiceText);
+        const selectedMatch = numberedChoice
+          ? pendingTopicChoice.matches[Number(numberedChoice[1]) - 1]
+          : isExisting && pendingTopicChoice.matches.length === 1
+            ? pendingTopicChoice.matches[0]
+            : null;
+
+        if (!isNew && !selectedMatch) {
+          response = pendingTopicChoice.matches.length > 1
+            ? 'Please choose an existing topic by number, or reply "new" to create a separate topic.'
+            : 'Please reply "existing" to use the topic I found, or "new" to create a separate topic.';
+        } else {
+          const chosenTopicName = selectedMatch?.name ?? pendingTopicChoice.requestedTopicName;
+          const execution = await executeAgentAction({
+            type: 'create_topics_bulk',
+            payload: {
+              subject_name: pendingTopicChoice.subjectName,
+              topics: [{
+                name: chosenTopicName,
+                year: 12,
+                subtopics: pendingTopicChoice.subtopics,
+              }],
+            },
+          }, data, user!.id);
+          response = execution.summary;
+          if (execution.success) action = execution.summary;
+          setPendingTopicChoice(null);
+          await data.refresh();
+        }
+      } else {
       // Route explicit topic and subtopic creation requests deterministically.
       // This avoids depending on the model to invent action names or payload fields.
       const bulkRequest = extractBulkCurriculumRequest(userMessage, messages, data.subjects);
@@ -141,10 +181,56 @@ export function AIAssistant({ open, onClose }: Props) {
             ? { type: 'create_topic', payload: topicRequest }
             : null;
       if (directRequest) {
-        const execution = await executeAgentAction(directRequest, data, user!.id);
-        response = execution.summary;
-        if (execution.success) action = execution.summary;
-        await data.refresh();
+        const singleBulkTopic = bulkAction?.topics.length === 1 ? bulkAction.topics[0] : null;
+        if (bulkAction && singleBulkTopic && singleBulkTopic.subtopics.length > 0) {
+          const subject = data.subjects.find(
+            (item) => item.name.trim().toLowerCase() === bulkAction.subject_name.trim().toLowerCase()
+          );
+          if (!subject) {
+            response = 'I could not identify the subject, so no subtopics were added.';
+          } else {
+            const { data: existingRows, error: existingError } = await supabase
+              .from('topics')
+              .select('id, name, parent_id')
+              .eq('subject_id', subject.id);
+            if (existingError) {
+              response = 'I could not check your existing topics, so I stopped without adding anything. Please try again.';
+            } else {
+              const normalizeTopicName = (value: string) => value
+                .trim()
+                .replace(/^(?:topic\s*)?\d+\s*:\s*/i, '')
+                .replace(/\s+/g, ' ')
+                .toLowerCase();
+              const requestedKey = normalizeTopicName(singleBulkTopic.name);
+              const matches = (existingRows ?? [])
+                .filter((row) => !row.parent_id && normalizeTopicName(row.name) === requestedKey)
+                .map((row) => ({ id: row.id, name: row.name }));
+              if (matches.length > 0) {
+                setPendingTopicChoice({
+                  subjectName: subject.name,
+                  requestedTopicName: singleBulkTopic.name,
+                  subtopics: singleBulkTopic.subtopics,
+                  matches,
+                });
+                response = matches.length === 1
+                  ? 'I found an existing topic in Biology: "' + matches[0].name + '".\n\nDo you want me to add these subtopics to that existing topic, or create a new topic instead? Reply "existing" or "new".'
+                  : 'I found more than one existing topic that could match "' + singleBulkTopic.name + '":\n' +
+                    matches.map((item, index) => (index + 1) + '. ' + item.name).join('\n') +
+                    '\n\nReply with the number of the topic you want to use, or "new" to create a separate topic.';
+              } else {
+                const execution = await executeAgentAction(directRequest, data, user!.id);
+                response = execution.summary;
+                if (execution.success) action = execution.summary;
+                await data.refresh();
+              }
+            }
+          }
+        } else {
+          const execution = await executeAgentAction(directRequest, data, user!.id);
+          response = execution.summary;
+          if (execution.success) action = execution.summary;
+          await data.refresh();
+        }
       } else {
         const context = buildAppContext(data);
         const history = messages
@@ -199,6 +285,7 @@ export function AIAssistant({ open, onClose }: Props) {
             ? "I haven't changed anything. The AI did not return a save action, so nothing was written to your StudyTrack account. Please try again with a specific request."
             : result.message;
         }
+      }
       }
     } catch (e) {
       setError(e instanceof AiError ? e.message : 'Something went wrong. Please try again.');
