@@ -4,6 +4,9 @@ import { useTheme, ACCENTS } from '@/contexts/ThemeContext';
 import { EDUCATION_LEVELS, WEEKDAYS } from '@/lib/spacedRepetition';
 import { Check, Moon, Sun, User, GraduationCap, Sparkles, Palette } from 'lucide-react';
 
+// Update this whenever a user-facing StudyTrack change is committed.
+const APP_VERSION = '2.1';
+
 const AI_TONES = [
   { id: 'friendly', label: 'Friendly', hint: 'Warm and supportive' },
   { id: 'formal', label: 'Formal', hint: 'Precise and academic' },
@@ -232,6 +235,20 @@ export function SettingsPage() {
             </div>
             <p className="text-xs text-tertiary mt-2">Appearance preferences are saved on this device.</p>
           </div>
+        </div>
+
+        {/* App version */}
+        <div className="card p-5">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-primary">About StudyTrack</h3>
+              <p className="text-sm text-secondary mt-1">App version</p>
+            </div>
+            <span className="rounded-lg bg-brand-500/10 text-brand-600 px-3 py-1.5 text-sm font-semibold">
+              v{APP_VERSION}
+            </span>
+          </div>
+          <p className="text-xs text-tertiary mt-3">The version number changes when StudyTrack is updated.</p>
         </div>
 
         {/* Save button */}
