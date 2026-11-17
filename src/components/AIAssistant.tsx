@@ -162,27 +162,32 @@ export function AIAssistant({ open, onClose }: Props) {
       // Handle a specifically targeted parent topic before curriculum imports.
       // Otherwise an older curriculum list in chat history can be mistaken for
       // the current request and bypass the existing-topic confirmation.
-      const generatedSubtopicsRequest = extractAqaTopicSubtopicsRequest(
+      const namedSubtopicsRequest = extractNamedSubtopicsRequest(
         userMessage, data.topics, data.subjects
       );
-      const subtopicsBulkRequest = generatedSubtopicsRequest
+      const generatedSubtopicsRequest = namedSubtopicsRequest
+        ? null
+        : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
+      const subtopicsBulkRequest = namedSubtopicsRequest || generatedSubtopicsRequest
         ? null
         : extractSubtopicsBulkRequest(userMessage, data.subjects);
-      const subtopicRequest = generatedSubtopicsRequest || subtopicsBulkRequest
+      const subtopicRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
       // A direct request to create one topic must take priority over curriculum
       // imports inferred from earlier chat history. Otherwise an old syllabus
       // list can hijack a simple request such as "Create a new topic called X in Biology".
-      const topicRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
+      const topicRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
-      const bulkRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
+      const bulkRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
         ? null
         : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
       const bulkAction = generatedSubtopicsRequest ?? subtopicsBulkRequest ?? bulkRequest;
-      const directRequest = bulkAction
-        ? { type: 'create_topics_bulk', payload: bulkAction }
+      const directRequest = namedSubtopicsRequest
+        ? { type: 'create_subtopics_bulk', payload: namedSubtopicsRequest }
+        : bulkAction
+          ? { type: 'create_topics_bulk', payload: bulkAction }
         : subtopicRequest
           ? { type: 'create_subtopic', payload: subtopicRequest }
           : topicRequest
@@ -615,6 +620,28 @@ function extractCreateTopicRequest(
   return null;
 }
 
+function extractNamedSubtopicsRequest(
+  message: string,
+  topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
+  subjects: { id: string; name: string }[]
+): { subject_name: string; parent_topic_name: string; subtopics: string[] } | null {
+  const text = message.trim();
+  if (!/^(?:please\\s+)?add\\s+these\\s+subtopics\\b/i.test(text)) return null;
+  const quoted = [...text.matchAll(/"([^"]+)"|'([^']+)'/g)]
+    .map((match) => (match[1] ?? match[2] ?? '').trim())
+    .filter(Boolean);
+  if (quoted.length < 2 || quoted.length > 31) return null;
+  const parentName = quoted[quoted.length - 1];
+  const subtopicNames = [...new Set(quoted.slice(0, -1))];
+  const parentMatches = topics.filter((topic) =>
+    !topic.parent_id && topic.name.trim().toLowerCase() === parentName.toLowerCase()
+  );
+  if (parentMatches.length !== 1) return null;
+  const subject = subjects.find((item) => item.id === parentMatches[0].subject_id);
+  if (!subject || subtopicNames.length === 0) return null;
+  return { subject_name: subject.name, parent_topic_name: parentMatches[0].name, subtopics: subtopicNames };
+}
+
 function extractSubtopicsBulkRequest(
   message: string,
   subjects: { id: string; name: string }[]
@@ -1007,6 +1034,42 @@ async function executeAgentAction(
           success: true,
           summary: 'Added "' + created.name + '" to ' + subject.name + '.',
         };
+      }
+      case 'create_subtopics_bulk': {
+        const subjectName = getText('subject_name');
+        const parentName = getText('parent_topic_name');
+        const rawNames = p.subtopics;
+        if (!subjectName || !parentName || !Array.isArray(rawNames)) {
+          return failed('A subject, parent topic and list of subtopics are required. No changes were made.');
+        }
+        const names = [...new Set(rawNames.filter((value): value is string => typeof value === 'string').map((value) => value.trim()).filter(Boolean))];
+        if (names.length === 0 || names.length > 30) return failed('Please provide between 1 and 30 valid subtopic names. No changes were made.');
+        const { data: subjectRows, error: subjectError } = await supabase.from('subjects').select('id, name').eq('user_id', userId);
+        if (subjectError) return failed('I could not load your subjects, so no subtopics were added.');
+        const subject = (subjectRows ?? []).find((row) => row.name.trim().toLowerCase() === subjectName.toLowerCase());
+        if (!subject) return failed('I could not find the subject "' + subjectName + '". No subtopics were added.');
+        const { data: parentRows, error: parentError } = await supabase.from('topics').select('id, name, parent_id, position').eq('subject_id', subject.id);
+        if (parentError) return failed('I could not check the parent topic, so no subtopics were added.');
+        const parents = (parentRows ?? []).filter((row) => !row.parent_id && row.name.trim().toLowerCase() === parentName.toLowerCase());
+        if (parents.length !== 1) return failed(parents.length === 0 ? 'I could not find the parent topic "' + parentName + '" in ' + subject.name + '. No subtopics were added.' : 'There is more than one matching parent topic. No subtopics were added.');
+        const parent = parents[0];
+        const siblings = (parentRows ?? []).filter((row) => row.parent_id === parent.id);
+        const existingNames = new Set(siblings.map((row) => row.name.trim().toLowerCase()));
+        const toInsert = names.filter((name) => !existingNames.has(name.toLowerCase()));
+        if (toInsert.length === 0) return failed('Those subtopics already exist under "' + parent.name + '". No changes were made.');
+        let position = siblings.reduce((max, row) => Math.max(max, Number(row.position ?? -1)), -1) + 1;
+        const rows = toInsert.map((name) => ({ subject_id: subject.id, parent_id: parent.id, name, description: null, position: position++, is_difficult: false }));
+        const { error: insertError } = await supabase.from('topics').insert(rows);
+        if (insertError) {
+          console.error('Multiple subtopic insert failed:', insertError);
+          return failed('I could not save the subtopics under "' + parent.name + '". No success was reported.');
+        }
+        const { data: verifiedRows, error: verifyError } = await supabase.from('topics').select('name, parent_id').eq('subject_id', subject.id).eq('parent_id', parent.id);
+        if (verifyError || !verifiedRows) return failed('The save request completed, but I could not verify the subtopics. Please refresh before retrying.');
+        const verified = new Set(verifiedRows.map((row) => row.name.trim().toLowerCase()));
+        const confirmed = toInsert.filter((name) => verified.has(name.toLowerCase()));
+        if (confirmed.length !== toInsert.length) return failed('Only ' + confirmed.length + ' of ' + toInsert.length + ' requested subtopics could be verified under "' + parent.name + '". Please refresh before retrying.');
+        return { success: true, summary: 'Added and verified ' + confirmed.length + ' subtopics under "' + parent.name + '" in ' + subject.name + ': ' + confirmed.join(', ') + '.' };
       }
       case 'create_subtopic': {
         const name = getText('name');
