@@ -19,9 +19,9 @@ export function useUserData() {
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const loadAll = useCallback(async () => {
+  const loadAll = useCallback(async (showLoading = false) => {
     if (!user) return;
-    setLoading(true);
+    if (showLoading) setLoading(true);
     const [subs, tops, studies, revs, tsk, proj, nts, fcs, evs] = await Promise.all([
       supabase.from('subjects').select('*').order('position'),
       supabase.from('topics').select('*').order('position'),
@@ -47,7 +47,7 @@ export function useUserData() {
   }, [user]);
 
   useEffect(() => {
-    loadAll();
+    loadAll(true);
   }, [loadAll]);
 
   // Each component has its own useUserData instance. Broadcast refreshes so
@@ -58,7 +58,7 @@ export function useUserData() {
       const detail = (event as CustomEvent<{ userId?: string; sourceId?: string }>).detail;
       if (detail?.sourceId === instanceId) return;
       if (detail?.userId && detail.userId !== user?.id) return;
-      void loadAll();
+      void loadAll(false);
     };
 
     window.addEventListener(DATA_REFRESH_EVENT, handleDataRefresh);
@@ -70,7 +70,7 @@ export function useUserData() {
     window.dispatchEvent(new CustomEvent(DATA_REFRESH_EVENT, {
       detail: { userId: user.id, sourceId: instanceId },
     }));
-    await loadAll();
+    await loadAll(false);
   }, [instanceId, loadAll, user?.id]);
 
   // Build topic tree helper
