@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -21,17 +21,17 @@ export function SubjectsPage() {
   const [showTopicModal, setShowTopicModal] = useState<{ parentId: string | null; editing?: Topic } | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ type: 'subject' | 'topic'; id: string; name: string } | null>(null);
 
-  // Automatically reveal newly-created subtopics so AI-created items are visible.
+  // Expand existing parents once after the initial load. Do not re-expand
+  // everything after each save/delete, because that overrides the user's choices.
+  const initialExpansionDone = useRef(false);
   useEffect(() => {
-    const parentsWithChildren = data.topics.filter((topic) => topic.parent_id).map((topic) => topic.parent_id as string);
-    if (parentsWithChildren.length) {
-      setExpandedTopics((previous) => {
-        const next = new Set(previous);
-        parentsWithChildren.forEach((id) => next.add(id));
-        return next;
-      });
-    }
-  }, [data.topics]);
+    if (data.loading || initialExpansionDone.current) return;
+    initialExpansionDone.current = true;
+    const parentsWithChildren = data.topics
+      .filter((topic) => topic.parent_id)
+      .map((topic) => topic.parent_id as string);
+    if (parentsWithChildren.length) setExpandedTopics(new Set(parentsWithChildren));
+  }, [data.loading, data.topics]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -48,14 +48,46 @@ export function SubjectsPage() {
 
   const handleDelete = async () => {
     if (!deleteTarget) return;
-    if (deleteTarget.type === 'subject') {
-      await supabase.from('subjects').delete().eq('id', deleteTarget.id);
-      if (selectedSubject?.id === deleteTarget.id) setSelectedSubject(null);
+    const target = deleteTarget;
+
+    if (target.type === 'subject') {
+      const { error } = await supabase.from('subjects').delete().eq('id', target.id);
+      if (error) {
+        console.error('Failed to delete subject:', error);
+        return;
+      }
+      // Update the visible tree immediately; refresh the remaining related data
+      // in the background without replacing the page with a loading screen.
+      data.setSubjects((previous) => previous.filter((subject) => subject.id !== target.id));
+      data.setTopics((previous) => previous.filter((topic) => topic.subject_id !== target.id));
+      if (selectedSubject?.id === target.id) setSelectedSubject(null);
     } else {
-      await supabase.from('topics').delete().eq('id', deleteTarget.id);
+      const { error } = await supabase.from('topics').delete().eq('id', target.id);
+      if (error) {
+        console.error('Failed to delete topic or subtopic:', error);
+        return;
+      }
+      const removedIds = new Set<string>([target.id]);
+      let foundDescendant = true;
+      while (foundDescendant) {
+        foundDescendant = false;
+        for (const topic of data.topics) {
+          if (topic.parent_id && removedIds.has(topic.parent_id) && !removedIds.has(topic.id)) {
+            removedIds.add(topic.id);
+            foundDescendant = true;
+          }
+        }
+      }
+      data.setTopics((previous) => previous.filter((topic) => !removedIds.has(topic.id)));
+      setExpandedTopics((previous) => {
+        const next = new Set(previous);
+        removedIds.forEach((id) => next.delete(id));
+        return next;
+      });
     }
+
     setDeleteTarget(null);
-    data.refresh();
+    void data.refresh();
   };
 
   const renderTopicTree = (topics: Topic[], level = 0) => {
