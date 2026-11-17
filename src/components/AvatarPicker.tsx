@@ -32,7 +32,9 @@ export function AvatarPicker({ displayName, size = 96 }: Props) {
       cacheControl: '3600', contentType: file.type, upsert: false,
     });
     if (uploadError) {
-      setMessage(uploadError.message);
+      setMessage(uploadError.message.toLowerCase().includes('bucket not found')
+        ? 'Profile-picture storage is not set up in Supabase yet. The avatars bucket must be created before uploads can work.'
+        : uploadError.message);
       setUploading(false);
       return;
     }
