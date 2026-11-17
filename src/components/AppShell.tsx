@@ -146,12 +146,18 @@ export function AppShell() {
 
   const SidebarContent = () => (
     <>
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-app">
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white shrink-0" style={{ background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' }}>
+      <button
+        type="button"
+        onClick={() => { setPage('dashboard'); setSidebarOpen(false); }}
+        className="group flex items-center gap-3 px-4 py-5 border-b border-app text-left w-full transition-all duration-300 hover:bg-white/40 dark:hover:bg-white/[0.06]"
+        aria-label="Go to StudyTrack dashboard"
+        title="Go to dashboard"
+      >
+        <span className="w-9 h-9 rounded-xl flex items-center justify-center text-white shrink-0 shadow-lg transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3" style={{ background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' }}>
           <GraduationCap size={20} />
-        </div>
-        <span className="text-lg font-bold text-primary">StudyTrack</span>
-      </div>
+        </span>
+        <span className="text-lg font-bold text-primary tracking-tight">StudyTrack</span>
+      </button>
 
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
         {navItems.map((item) => (
