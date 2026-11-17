@@ -308,7 +308,8 @@ function SubjectModal({ subject, onClose, userId, position, onSaved }: {
       onSaved();
     } catch (error) {
       console.error('Failed to save subject:', error);
-      setSaveError(error instanceof Error ? error.message : 'Could not save this subject. Please try again.');
+      const details = error && typeof error === 'object' ? error as { message?: string; details?: string; hint?: string; code?: string } : null;
+      setSaveError([details?.message, details?.details, details?.hint, details?.code ? `Code: ${details.code}` : ''].filter(Boolean).join(' · ') || (error instanceof Error ? error.message : String(error) || 'Could not save this subject.'));
     } finally {
       setSaving(false);
     }
@@ -395,7 +396,8 @@ function TopicModal({ topic, subjectId, parentId, position, teacherNames, onClos
       onSaved();
     } catch (error) {
       console.error('Failed to save topic or subtopic:', error);
-      setSaveError(error instanceof Error ? error.message : 'Could not save this topic. Please try again.');
+      const details = error && typeof error === 'object' ? error as { message?: string; details?: string; hint?: string; code?: string } : null;
+      setSaveError([details?.message, details?.details, details?.hint, details?.code ? `Code: ${details.code}` : ''].filter(Boolean).join(' · ') || (error instanceof Error ? error.message : String(error) || 'Could not save this topic.'));
     } finally {
       setSaving(false);
     }
