@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { AvatarPicker } from '@/components/AvatarPicker';
 import { useTheme, ACCENTS } from '@/contexts/ThemeContext';
 import { EDUCATION_LEVELS, WEEKDAYS } from '@/lib/spacedRepetition';
 import { Check, Moon, Sun, User, GraduationCap, Sparkles, Palette } from 'lucide-react';
 
 // Update this whenever a user-facing StudyTrack change is committed.
-const APP_VERSION = '2.2';
+const APP_VERSION = '2.3';
 
 const AI_TONES = [
   { id: 'friendly', label: 'Friendly', hint: 'Warm and supportive' },
@@ -68,6 +69,7 @@ export function SettingsPage() {
             <h3 className="font-semibold text-primary">Profile</h3>
           </div>
           <div className="space-y-4">
+            <AvatarPicker displayName={displayName} size={104} />
             <div>
               <label className="block text-sm font-medium text-secondary mb-1.5">Display name</label>
               <input className="input" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
