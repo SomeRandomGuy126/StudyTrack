@@ -159,20 +159,25 @@ export function AIAssistant({ open, onClose }: Props) {
       } else {
       // Route explicit topic and subtopic creation requests deterministically.
       // This avoids depending on the model to invent action names or payload fields.
-      const bulkRequest = extractBulkCurriculumRequest(userMessage, messages, data.subjects);
-      const generatedSubtopicsRequest = bulkRequest
-        ? null
-        : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
-      const subtopicsBulkRequest = bulkRequest || generatedSubtopicsRequest
+      // Handle a specifically targeted parent topic before curriculum imports.
+      // Otherwise an older curriculum list in chat history can be mistaken for
+      // the current request and bypass the existing-topic confirmation.
+      const generatedSubtopicsRequest = extractAqaTopicSubtopicsRequest(
+        userMessage, data.topics, data.subjects
+      );
+      const subtopicsBulkRequest = generatedSubtopicsRequest
         ? null
         : extractSubtopicsBulkRequest(userMessage, data.subjects);
-      const subtopicRequest = bulkRequest || generatedSubtopicsRequest || subtopicsBulkRequest
+      const subtopicRequest = generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
+      const bulkRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
+        ? null
+        : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
       const topicRequest = bulkRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
-      const bulkAction = bulkRequest ?? generatedSubtopicsRequest ?? subtopicsBulkRequest;
+      const bulkAction = generatedSubtopicsRequest ?? subtopicsBulkRequest ?? bulkRequest;
       const directRequest = bulkAction
         ? { type: 'create_topics_bulk', payload: bulkAction }
         : subtopicRequest
@@ -197,9 +202,13 @@ export function AIAssistant({ open, onClose }: Props) {
               response = 'I could not check your existing topics, so I stopped without adding anything. Please try again.';
             } else {
               const normalizeTopicName = (value: string) => value
+                .normalize('NFKC')
                 .trim()
-                .replace(/^(?:topic\s*)?\d+\s*:\s*/i, '')
+                .replace(/^(?:the\s+)?topic\s*/i, '')
+                .replace(/^\d+\s*:\s*/, '')
+                .replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '')
                 .replace(/\s+/g, ' ')
+                .replace(/[.!?]+$/g, '')
                 .toLowerCase();
               const requestedKey = normalizeTopicName(singleBulkTopic.name);
               const matches = (existingRows ?? [])
@@ -508,7 +517,7 @@ type ActionExecutionResult = {
 };
 
 function normalizeSubject(value: string): string {
-  return value.trim().replace(/^(?:(?:the\\s+)?subject\\s+)/i, '').trim();
+  return value.trim().replace(/^(?:(?:the\s+)?subject\s+)/i, '').trim();
 }
 
 function extractAqaTopicSubtopicsRequest(
