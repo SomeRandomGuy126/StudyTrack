@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useUserData } from '@/hooks/useUserData';
 import { agentTurn, AiError } from '@/lib/aiClient';
 import {
-  X, Send, Bot, Sparkles, Loader2, Maximize2, Minimize2,
+  X, Send, Bot, Sparkles, Loader2, Maximize2, Minimize2, Minus,
   RefreshCw, User,
 } from 'lucide-react';
 import type { AiMessage } from '@/lib/supabase';
@@ -22,6 +22,9 @@ export function AIAssistant({ open, onClose }: Props) {
   const [loading, setLoading] = useState(false);
   const [historyLoaded, setHistoryLoaded] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [floatingPosition, setFloatingPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingTopicChoice, setPendingTopicChoice] = useState<{
     subjectName: string;
@@ -83,7 +86,7 @@ export function AIAssistant({ open, onClose }: Props) {
         id: 'welcome',
         user_id: user!.id,
         role: 'assistant',
-        content: "Hi! I'm Study AI. Ask me anything — I can explain concepts, help with homework, answer general questions, and I know what's in your StudyTrack account so I can help you plan.\n\nTry \"What should I revise today?\", \"Explain photosynthesis simply\" or \"Add a Biology study session about mitosis\".",
+        content: "Hi! I'm Nova, Ask me anything — I can explain concepts, help with homework, answer general questions, and I know what's in your StudyTrack account so I can help you plan.\n\nTry \"What should I revise today?\", \"Explain photosynthesis simply\" or \"Add a Biology study session about mitosis\".",
         action_taken: null,
         created_at: new Date().toISOString(),
       }]);
@@ -346,50 +349,61 @@ export function AIAssistant({ open, onClose }: Props) {
     "Add a Biology study session",
   ];
 
-  const panelSize = fullscreen
-    ? 'fixed inset-0 z-50 w-full h-full'
-    : 'fixed top-0 right-0 h-full w-full sm:w-[440px] z-50';
+  const panelSize = fullscreen ? 'fixed inset-0 z-50 w-full h-full' : 'fixed z-50 flex flex-col rounded-2xl border border-app shadow-2xl surface';
+  const handleDragStart = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (fullscreen || (event.target as HTMLElement).closest('button')) return;
+    const rect = event.currentTarget.parentElement?.getBoundingClientRect();
+    if (!rect) return;
+    dragRef.current = { pointerId: event.pointerId, startX: event.clientX, startY: event.clientY, originX: rect.left, originY: rect.top };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const drag = dragRef.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    const rect = event.currentTarget.parentElement?.getBoundingClientRect();
+    const width = rect?.width ?? 440, height = rect?.height ?? 600;
+    setFloatingPosition({
+      x: Math.max(8, Math.min(window.innerWidth - width - 8, drag.originX + event.clientX - drag.startX)),
+      y: Math.max(8, Math.min(window.innerHeight - Math.min(height, 120) - 8, drag.originY + event.clientY - drag.startY)),
+    });
+  };
+  const handleDragEnd = () => { dragRef.current = null; };
+  const floatingStyle: React.CSSProperties = fullscreen ? {} : {
+    left: floatingPosition?.x, top: floatingPosition?.y,
+    right: floatingPosition ? 'auto' : 24, bottom: floatingPosition ? 'auto' : 24,
+    width: 'min(440px, calc(100vw - 32px))',
+    height: minimized ? 'auto' : 'min(720px, calc(100vh - 48px))',
+    minHeight: minimized ? 'auto' : 280, resize: minimized ? 'none' : 'both', overflow: 'hidden',
+  };
 
   return (
     <>
-      {/* Backdrop */}
-      {open && !fullscreen && <div className="fixed inset-0 bg-black/30 z-40 lg:bg-black/20" onClick={onClose} />}
-
-      {/* Panel */}
-      <div
-        className={`${panelSize} flex flex-col surface border-l border-app transition-all duration-300 ${
-          open ? 'translate-x-0' : 'translate-x-full'
-        } ${fullscreen ? 'opacity-100' : ''}`}
-        style={fullscreen ? { transform: open ? 'none' : 'translateX(100%)' } : undefined}
-      >
-        {/* Header */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-app shrink-0">
+      <div className={`${panelSize} transition-all duration-200 ${open ? 'opacity-100 scale-100' : 'opacity-0 scale-95 pointer-events-none'}`}
+        style={floatingStyle} aria-hidden={!open}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-app shrink-0 cursor-grab active:cursor-grabbing select-none"
+          onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}
+          onPointerCancel={handleDragEnd} style={{ touchAction: 'none' }}>
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-lg flex items-center justify-center text-white" style={{ background: 'linear-gradient(135deg, var(--accent-secondary), var(--accent))' }}>
               <Bot size={20} />
             </div>
             <div>
-              <h3 className="font-semibold text-primary">Study AI</h3>
-              <p className="text-xs text-tertiary">{fullscreen ? 'Full screen' : 'Your study assistant'}</p>
+              <h3 className="font-semibold text-primary">Nova</h3>
+              <p className="text-xs text-tertiary">{fullscreen ? 'Full screen' : 'Your StudyTrack study companion'}</p>
             </div>
           </div>
           <div className="flex items-center gap-1">
-            <button onClick={startNewChat} title="Start a new chat" className="btn-ghost btn !p-2">
-              <RefreshCw size={16} />
-            </button>
-            <button
-              onClick={() => setFullscreen((f) => !f)}
-              title={fullscreen ? 'Exit full screen' : 'Full screen'}
-              className="btn-ghost btn !p-2"
-            >
+            <button onClick={startNewChat} title="Start a new chat" className="btn-ghost btn !p-2"><RefreshCw size={16} /></button>
+            <button onClick={() => setMinimized((value) => !value)} title={minimized ? 'Expand Nova' : 'Minimise Nova'} className="btn-ghost btn !p-2"><Minus size={16} /></button>
+            <button onClick={() => { setMinimized(false); setFullscreen((value) => !value); }}
+              title={fullscreen ? 'Exit full screen' : 'Full screen'} className="btn-ghost btn !p-2">
               {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
             </button>
-            <button onClick={onClose} className="btn-ghost btn !p-2">
-              <X size={18} />
-            </button>
+            <button onClick={onClose} title="Close Nova" className="btn-ghost btn !p-2"><X size={18} /></button>
           </div>
         </div>
 
+        {!minimized && <>
         {/* Messages */}
         <div ref={scrollRef} className={`flex-1 overflow-y-auto px-4 py-4 space-y-3 ${fullscreen ? 'mx-auto w-full max-w-3xl' : ''}`}>
           {messages.map((msg) => (
@@ -475,6 +489,7 @@ export function AIAssistant({ open, onClose }: Props) {
             </button>
           </div>
         </div>
+        </>}
       </div>
     </>
   );
