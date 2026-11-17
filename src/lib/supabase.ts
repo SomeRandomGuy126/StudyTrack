@@ -14,6 +14,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
 export type Profile = {
   id: string;
   display_name: string;
+  avatar_url: string | null;
   education_level: string | null;
   school: string | null;
   preferred_study_days: string[];
