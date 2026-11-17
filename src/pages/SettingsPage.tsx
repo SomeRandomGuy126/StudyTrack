@@ -5,7 +5,7 @@ import { EDUCATION_LEVELS, WEEKDAYS } from '@/lib/spacedRepetition';
 import { Check, Moon, Sun, User, GraduationCap, Sparkles, Palette } from 'lucide-react';
 
 // Update this whenever a user-facing StudyTrack change is committed.
-const APP_VERSION = '2.1';
+const APP_VERSION = '2.1.1';
 
 const AI_TONES = [
   { id: 'friendly', label: 'Friendly', hint: 'Warm and supportive' },
