@@ -112,14 +112,18 @@ export function AIAssistant({ open, onClose }: Props) {
       const generatedSubtopicsRequest = bulkRequest
         ? null
         : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
-      const subtopicRequest = bulkRequest || generatedSubtopicsRequest
+      const subtopicsBulkRequest = bulkRequest || generatedSubtopicsRequest
+        ? null
+        : extractSubtopicsBulkRequest(userMessage, data.subjects);
+      const subtopicRequest = bulkRequest || generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
-      const topicRequest = bulkRequest || generatedSubtopicsRequest || subtopicRequest
+      const topicRequest = bulkRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
-      const directRequest = bulkRequest || generatedSubtopicsRequest
-        ? { type: 'create_topics_bulk', payload: bulkRequest ?? generatedSubtopicsRequest }
+      const bulkAction = bulkRequest ?? generatedSubtopicsRequest ?? subtopicsBulkRequest;
+      const directRequest = bulkAction
+        ? { type: 'create_topics_bulk', payload: bulkAction }
         : subtopicRequest
           ? { type: 'create_subtopic', payload: subtopicRequest }
           : topicRequest
@@ -410,7 +414,7 @@ function extractAqaTopicSubtopicsRequest(
   subjects: { id: string; name: string }[]
 ): { subject_name: string; topics: BulkCurriculumTopic[] } | null {
   const match = message.trim().match(
-    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:now\\s+)?(?:add|create|generate)\\s+(?:the\\s+)?(?:appropriate|relevant|suitable)?\\s*subtopics\\s+(?:to|under|for)\\s+(?:the\\s+)?topic\\s+(.+?)\\s+(?:in|under|for)\\s+(?:the\\s+)?(?:subject\\s+)?(.+?)(?:\\s+please)?[.!?]*$/i
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:now\s+)?(?:add|create|generate)\s+(?:the\s+)?(?:appropriate|relevant|suitable)?\s*subtopics\s+(?:to|under|for)\s+(?:the\s+)?topic\s+(.+?)\s+(?:in|under|for)\s+(?:(?:the\s+)?subject\s+)?(.+?)(?:\s+please)?[.!?]*$/i
   );
   if (!match) return null;
 
@@ -465,7 +469,7 @@ function extractCreateTopicRequest(
     /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:add|create|make)\s+(?:(?:a|the|new)\s+)?topic\s+(?:in|under|for|to)\s+(.+?)\s+(?:called|named)\s+(.+?)(?:\s+please)?[.!?]*$/i
   );
   if (subjectFirst) {
-    const requestedSubject = clean(subjectFirst[1]);
+    const requestedSubject = normalizeSubject(subjectFirst[1]);
     const name = clean(subjectFirst[2]);
     const subject = subjects.find(
       (item) => item.name.trim().toLowerCase() === requestedSubject.toLowerCase()
@@ -484,7 +488,7 @@ function extractCreateTopicRequest(
     if (!match) continue;
 
     const name = clean(match[1]);
-    const requestedSubject = clean(match[2]);
+    const requestedSubject = normalizeSubject(match[2]);
     if (!name || !requestedSubject) continue;
 
     const subject = subjects.find(
@@ -494,6 +498,36 @@ function extractCreateTopicRequest(
   }
 
   return null;
+}
+
+function extractSubtopicsBulkRequest(
+  message: string,
+  subjects: { id: string; name: string }[]
+): { subject_name: string; topics: BulkCurriculumTopic[] } | null {
+  const text = message.trim().replace(/[.!?]+$/, '');
+  const match = text.match(
+    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:now\\s+)?(?:add|create|make)\\s+(.+?)\\s+as\\s+(?:a\\s+)?subtopics?\\s+(?:to|under|of|within)\\s+(?:(?:the\\s+)?topic\\s+)?(.+?)\\s+(?:in|under|for)\\s+(.+?)\\s*$/i
+  );
+  if (!match) return null;
+
+  const clean = (value: string) =>
+    value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').trim();
+  const subjectInput = clean(match[3]).replace(/^(?:the\\s+)?subject\\s+/i, '');
+  const subject = subjects.find((item) =>
+    item.name.trim().toLowerCase() === subjectInput.toLowerCase()
+  );
+  if (!subject) return null;
+
+  const parentName = clean(match[2]).replace(/^(?:the\\s+)?topic\\s+/i, '');
+  const names = match[1].split(/\\s*,\\s*|\\s+and\\s+/i)
+    .map(clean)
+    .filter(Boolean);
+  if (!parentName || names.length === 0 || names.length > 30) return null;
+
+  return {
+    subject_name: subject.name,
+    topics: [{ name: parentName, year: 12, subtopics: [...new Set(names)] }],
+  };
 }
 
 function extractCreateSubtopicRequest(
