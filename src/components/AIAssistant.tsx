@@ -171,12 +171,15 @@ export function AIAssistant({ open, onClose }: Props) {
       const subtopicRequest = generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
-      const bulkRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
-        ? null
-        : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
-      const topicRequest = bulkRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
+      // A direct request to create one topic must take priority over curriculum
+      // imports inferred from earlier chat history. Otherwise an old syllabus
+      // list can hijack a simple request such as "Create a new topic called X in Biology".
+      const topicRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
+      const bulkRequest = generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
+        ? null
+        : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
       const bulkAction = generatedSubtopicsRequest ?? subtopicsBulkRequest ?? bulkRequest;
       const directRequest = bulkAction
         ? { type: 'create_topics_bulk', payload: bulkAction }
