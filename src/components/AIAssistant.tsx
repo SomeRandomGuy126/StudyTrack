@@ -408,6 +408,10 @@ type ActionExecutionResult = {
   summary: string;
 };
 
+function normalizeSubject(value: string): string {
+  return value.trim().replace(/^(?:(?:the\\s+)?subject\\s+)/i, '').trim();
+}
+
 function extractAqaTopicSubtopicsRequest(
   message: string,
   topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
