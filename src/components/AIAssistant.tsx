@@ -369,9 +369,14 @@ export function AIAssistant({ open, onClose }: Props) {
     drag.panel.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
   };
   const handleDragEnd = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current as (NonNullable<typeof dragRef.current> & { panel?: HTMLDivElement }) | null;
+    const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId || !drag.panel) return;
     const panel = drag.panel;
+    if (event.type === 'pointercancel') {
+      panel.style.transform = '';
+      dragRef.current = null;
+      return;
+    }
     const width = panel.offsetWidth;
     const height = panel.offsetHeight;
     const dx = event.clientX - drag.startX;
