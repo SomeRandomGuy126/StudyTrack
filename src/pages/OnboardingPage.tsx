@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
+import { AvatarPicker } from '@/components/AvatarPicker';
 import { supabase } from '@/lib/supabase';
 import { EDUCATION_LEVELS, WEEKDAYS, SUBJECT_COLORS } from '@/lib/spacedRepetition';
 import { GraduationCap, ArrowRight, ArrowLeft, Plus, X, Check } from 'lucide-react';
@@ -152,6 +153,8 @@ export function OnboardingPage() {
 
           {step === 0 && (
             <div className="space-y-4">
+              <AvatarPicker displayName={displayName} size={96} />
+              <p className="text-xs text-tertiary">Profile photo is optional. Leave it blank to use your initial.</p>
               <div>
                 <label className="block text-sm font-medium text-secondary mb-1.5">Display name</label>
                 <input
