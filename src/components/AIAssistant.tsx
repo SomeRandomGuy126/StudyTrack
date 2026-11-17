@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useUserData } from '@/hooks/useUserData';
 import { agentTurn, AiError } from '@/lib/aiClient';
 import {
-  X, Send, Bot, Sparkles, Loader2, Maximize2, Minimize2, Minus,
+  X, Send, Bot, Sparkles, Loader2, Maximize2, Minimize2, ChevronDown, ChevronUp,
   RefreshCw, User,
 } from 'lucide-react';
 import type { AiMessage } from '@/lib/supabase';
@@ -394,7 +394,7 @@ export function AIAssistant({ open, onClose }: Props) {
           </div>
           <div className="flex items-center gap-1">
             <button onClick={startNewChat} title="Start a new chat" className="btn-ghost btn !p-2"><RefreshCw size={16} /></button>
-            <button onClick={() => setMinimized((value) => !value)} title={minimized ? 'Expand Nova' : 'Minimise Nova'} className="btn-ghost btn !p-2"><Minus size={16} /></button>
+            <button onClick={() => setMinimized((value) => !value)} title={minimized ? 'Expand Nova' : 'Minimise Nova'} className="btn-ghost btn !p-2">{minimized ? <ChevronUp size={16} /> : <ChevronDown size={16} />}</button>
             <button onClick={() => { setMinimized(false); setFullscreen((value) => !value); }}
               title={fullscreen ? 'Exit full screen' : 'Full screen'} className="btn-ghost btn !p-2">
               {fullscreen ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
