@@ -24,7 +24,7 @@ export function AIAssistant({ open, onClose }: Props) {
   const [fullscreen, setFullscreen] = useState(false);
   const [minimized, setMinimized] = useState(false);
   const [floatingPosition, setFloatingPosition] = useState<{ x: number; y: number } | null>(null);
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
+  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number; panel: HTMLDivElement } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pendingTopicChoice, setPendingTopicChoice] = useState<{
     subjectName: string;
@@ -357,11 +357,11 @@ export function AIAssistant({ open, onClose }: Props) {
     dragRef.current = {
       pointerId: event.pointerId, startX: event.clientX, startY: event.clientY,
       originX: rect.left, originY: rect.top, panel,
-    } as typeof dragRef.current;
+    };
     event.currentTarget.setPointerCapture(event.pointerId);
   };
   const handleDragMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    const drag = dragRef.current as (NonNullable<typeof dragRef.current> & { panel?: HTMLDivElement }) | null;
+    const drag = dragRef.current;
     if (!drag || drag.pointerId !== event.pointerId || !drag.panel) return;
     const dx = event.clientX - drag.startX;
     const dy = event.clientY - drag.startY;
