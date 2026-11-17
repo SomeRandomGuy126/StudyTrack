@@ -698,7 +698,7 @@ function extractNestedSubtopicBatchRequest(
   topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
   subjects: { id: string; name: string }[]
 ): { name: string; parent_topic_name: string; subject_name: string }[] | null {
-  const lines = message.split(/\\r?\\n/).map((line) => line.trim()).filter(Boolean);
+  const lines = message.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   if (lines.length < 2 || lines.length > 30) return null;
 
   // A pasted batch is a list of independent nested-subtopic commands.
