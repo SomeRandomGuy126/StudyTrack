@@ -165,37 +165,42 @@ export function AIAssistant({ open, onClose }: Props) {
       // Handle a specifically targeted parent topic before curriculum imports.
       // Otherwise an older curriculum list in chat history can be mistaken for
       // the current request and bypass the existing-topic confirmation.
-      const namedSubtopicsRequest = extractNamedSubtopicsRequest(
+      const nestedSubtopicRequest = extractNestedSubtopicRequest(
         userMessage, data.topics, data.subjects
       );
-      const generatedSubtopicsRequest = namedSubtopicsRequest
+      const namedSubtopicsRequest = nestedSubtopicRequest
+        ? null
+        : extractNamedSubtopicsRequest(userMessage, data.topics, data.subjects);
+      const generatedSubtopicsRequest = nestedSubtopicRequest || namedSubtopicsRequest
         ? null
         : extractAqaTopicSubtopicsRequest(userMessage, data.topics, data.subjects);
-      const subtopicsBulkRequest = namedSubtopicsRequest || generatedSubtopicsRequest
+      const subtopicsBulkRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest
         ? null
         : extractSubtopicsBulkRequest(userMessage, data.subjects);
-      const subtopicRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest
+      const subtopicRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest
         ? null
         : extractCreateSubtopicRequest(userMessage, data.topics, data.subjects);
       // A direct request to create one topic must take priority over curriculum
       // imports inferred from earlier chat history. Otherwise an old syllabus
       // list can hijack a simple request such as "Create a new topic called X in Biology".
-      const topicRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
+      const topicRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest
         ? null
         : extractCreateTopicRequest(userMessage, data.subjects);
-      const bulkRequest = namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
+      const bulkRequest = nestedSubtopicRequest || namedSubtopicsRequest || generatedSubtopicsRequest || subtopicsBulkRequest || subtopicRequest || topicRequest
         ? null
         : extractBulkCurriculumRequest(userMessage, messages, data.subjects);
       const bulkAction = generatedSubtopicsRequest ?? subtopicsBulkRequest ?? bulkRequest;
-      const directRequest = namedSubtopicsRequest
-        ? { type: 'create_subtopics_bulk', payload: namedSubtopicsRequest }
-        : bulkAction
-          ? { type: 'create_topics_bulk', payload: bulkAction }
-        : subtopicRequest
-          ? { type: 'create_subtopic', payload: subtopicRequest }
-          : topicRequest
-            ? { type: 'create_topic', payload: topicRequest }
-            : null;
+      const directRequest = nestedSubtopicRequest
+        ? { type: 'create_subtopic', payload: nestedSubtopicRequest }
+        : namedSubtopicsRequest
+          ? { type: 'create_subtopics_bulk', payload: namedSubtopicsRequest }
+          : bulkAction
+            ? { type: 'create_topics_bulk', payload: bulkAction }
+          : subtopicRequest
+            ? { type: 'create_subtopic', payload: subtopicRequest }
+            : topicRequest
+              ? { type: 'create_topic', payload: topicRequest }
+              : null;
       if (directRequest) {
         const singleBulkTopic = bulkAction?.topics.length === 1 ? bulkAction.topics[0] : null;
         if (bulkAction && singleBulkTopic && singleBulkTopic.subtopics.length > 0) {
@@ -662,6 +667,58 @@ function extractCreateTopicRequest(
   }
 
   return null;
+}
+
+function extractNestedSubtopicRequest(
+  message: string,
+  topics: { id: string; name: string; subject_id: string; parent_id: string | null }[],
+  subjects: { id: string; name: string }[]
+): { name: string; parent_topic_name: string; subject_name: string } | null {
+  const text = message.trim().replace(/[.!?]+$/, '');
+  if (!/^(?:please\s+)?add\b/i.test(text) || !/\bas\s+a\s+subtopic\s+to\b/i.test(text)) return null;
+
+  // Quoted names make the requested hierarchy unambiguous:
+  // Add 'child' as a subtopic to 'parent' as a subtopic to 'root' in biology.
+  const quotedNames = [...text.matchAll(/["'“”‘’]([^"'“”‘’]+)["'“”‘’]/g)]
+    .map((match) => match[1].trim())
+    .filter(Boolean);
+  if (quotedNames.length < 3 || quotedNames.length > 12) return null;
+
+  const lastQuoted = [...text.matchAll(/["'“”‘’]([^"'“”‘’]+)["'“”‘’]/g)].at(-1);
+  if (!lastQuoted || lastQuoted.index === undefined) return null;
+  const subjectMatch = text.slice(lastQuoted.index + lastQuoted[0].length).match(/^\s+in\s+(.+?)\s*$/i);
+  if (!subjectMatch) return null;
+
+  const subjectInput = subjectMatch[1].trim().replace(/^(?:the\s+)?subject\s+/i, '');
+  const subject = subjects.find((item) => item.name.trim().toLowerCase() === subjectInput.toLowerCase());
+  if (!subject) return null;
+
+  const relationshipText = text.slice(0, lastQuoted.index);
+  const relationshipCount = [...relationshipText.matchAll(/\bas\s+a\s+subtopic\s+to\b/gi)].length;
+  if (relationshipCount !== quotedNames.length - 1) return null;
+
+  const hierarchyNames = quotedNames.slice(1);
+  const matchesForName = (name: string) => topics.filter((topic) =>
+    topic.subject_id === subject.id && topic.name.trim().toLowerCase() === name.toLowerCase()
+  );
+
+  // Validate every parent-child link against the saved tree. The final name
+  // must be a top-level topic, so Nova cannot accidentally skip a level.
+  for (let index = 0; index < hierarchyNames.length - 1; index += 1) {
+    const childMatches = matchesForName(hierarchyNames[index]);
+    const parentMatches = matchesForName(hierarchyNames[index + 1]);
+    if (childMatches.length !== 1 || parentMatches.length !== 1 ||
+        childMatches[0].parent_id !== parentMatches[0].id) return null;
+  }
+  const immediateParent = matchesForName(hierarchyNames[0]);
+  const rootMatches = matchesForName(hierarchyNames[hierarchyNames.length - 1]);
+  if (immediateParent.length !== 1 || rootMatches.length !== 1 || rootMatches[0].parent_id !== null) return null;
+
+  return {
+    name: quotedNames[0],
+    parent_topic_name: immediateParent[0].name,
+    subject_name: subject.name,
+  };
 }
 
 function extractNamedSubtopicsRequest(
