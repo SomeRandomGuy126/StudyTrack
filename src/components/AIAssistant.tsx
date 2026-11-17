@@ -419,7 +419,7 @@ function extractAqaTopicSubtopicsRequest(
   if (!match) return null;
 
   const clean = (value: string) =>
-    value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
+    value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').replace(/[.!?]+$/, '').trim();
   const topicName = clean(match[1]);
   const subjectName = clean(match[2]);
   const subject = subjects.find((item) => item.name.trim().toLowerCase() === subjectName.toLowerCase());
@@ -506,20 +506,20 @@ function extractSubtopicsBulkRequest(
 ): { subject_name: string; topics: BulkCurriculumTopic[] } | null {
   const text = message.trim().replace(/[.!?]+$/, '');
   const match = text.match(
-    /^(?:please\\s+|can you\\s+|could you\\s+|would you\\s+)*(?:now\\s+)?(?:add|create|make)\\s+(.+?)\\s+as\\s+(?:a\\s+)?subtopics?\\s+(?:to|under|of|within)\\s+(?:(?:the\\s+)?topic\\s+)?(.+?)\\s+(?:in|under|for)\\s+(.+?)\\s*$/i
+    /^(?:please\s+|can you\s+|could you\s+|would you\s+)*(?:now\s+)?(?:add|create|make)\s+(.+?)\s+as\s+(?:a\s+)?subtopics?\s+(?:to|under|of|within)\s+(?:(?:the\s+)?topic\s+)?(.+?)\s+(?:in|under|for)\s+(.+?)\s*$/i
   );
   if (!match) return null;
 
   const clean = (value: string) =>
-    value.trim().replace(/^[\\s"'“”‘’]+|[\\s"'“”‘’]+$/g, '').trim();
-  const subjectInput = clean(match[3]).replace(/^(?:the\\s+)?subject\\s+/i, '');
+    value.trim().replace(/^[\s"'“”‘’]+|[\s"'“”‘’]+$/g, '').trim();
+  const subjectInput = clean(match[3]).replace(/^(?:the\s+)?subject\s+/i, '');
   const subject = subjects.find((item) =>
     item.name.trim().toLowerCase() === subjectInput.toLowerCase()
   );
   if (!subject) return null;
 
-  const parentName = clean(match[2]).replace(/^(?:the\\s+)?topic\\s+/i, '');
-  const names = match[1].split(/\\s*,\\s*|\\s+and\\s+/i)
+  const parentName = clean(match[2]).replace(/^(?:the\s+)?topic\s+/i, '');
+  const names = match[1].split(/\s*,\s*|\s+and\s+/i)
     .map(clean)
     .filter(Boolean);
   if (!parentName || names.length === 0 || names.length > 30) return null;
