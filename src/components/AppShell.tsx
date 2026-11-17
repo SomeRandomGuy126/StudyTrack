@@ -284,12 +284,11 @@ export function AppShell() {
             <button onClick={toggleTheme} className="btn-ghost btn !p-2" title="Toggle theme">
               {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
             </button>
-            <div
-              className="w-9 h-9 rounded-full bg-brand-500 text-white flex items-center justify-center text-sm font-semibold shrink-0"
-              title={profile?.display_name}
-            >
-              {profile?.display_name?.charAt(0).toUpperCase() ?? 'U'}
-            </div>
+            <button type="button" onClick={() => setPage('settings')}
+              className="w-9 h-9 rounded-full overflow-hidden bg-brand-500 text-white flex items-center justify-center text-sm font-semibold shrink-0 ring-2 ring-transparent hover:ring-brand-400 transition-all"
+              title="Open profile settings" aria-label="Open profile settings">
+              {profile?.avatar_url ? <img src={profile.avatar_url} alt="Your profile" className="w-full h-full object-cover" /> : (profile?.display_name?.trim()?.charAt(0).toUpperCase() || 'U')}
+            </button>
           </div>
         </header>
 
