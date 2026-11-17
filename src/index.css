@@ -196,3 +196,97 @@
     background-color: var(--accent-hover);
   }
 }
+
+
+/* StudyTrack glass interface: translucent layers, soft depth and calm motion. */
+@layer base {
+  body {
+    background-image:
+      radial-gradient(ellipse at 12% 0%, rgb(var(--accent-rgb) / 0.075), transparent 38%),
+      radial-gradient(ellipse at 92% 14%, rgb(139 92 246 / 0.055), transparent 34%);
+    background-attachment: fixed;
+  }
+
+  button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+}
+
+@layer components {
+  .surface {
+    background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+    backdrop-filter: saturate(155%) blur(22px);
+    -webkit-backdrop-filter: saturate(155%) blur(22px);
+  }
+
+  .card {
+    background: color-mix(in srgb, var(--bg-secondary) 84%, transparent);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border-color: color-mix(in srgb, var(--border-color) 78%, transparent);
+    border-radius: 1rem;
+    box-shadow: 0 8px 30px rgb(15 23 42 / 0.045), inset 0 1px 0 rgb(255 255 255 / 0.45);
+    transition: transform 220ms cubic-bezier(.2,.8,.2,1), box-shadow 220ms ease, border-color 220ms ease;
+  }
+
+  .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 14px 38px rgb(15 23 42 / 0.075), inset 0 1px 0 rgb(255 255 255 / 0.55);
+    border-color: color-mix(in srgb, var(--accent) 24%, var(--border-color));
+  }
+
+  .dark .card {
+    background: color-mix(in srgb, var(--bg-secondary) 78%, transparent);
+    box-shadow: 0 12px 34px rgb(0 0 0 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.045);
+  }
+
+  .btn {
+    border-radius: 0.75rem;
+    transition: transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms ease, background-color 180ms ease, border-color 180ms ease;
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn:active { transform: translateY(0) scale(0.97); }
+  .btn-primary {
+    box-shadow: 0 5px 14px rgb(var(--accent-rgb) / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+
+  .nav-link {
+    border: 1px solid transparent;
+    transition: transform 180ms ease, background-color 180ms ease, color 180ms ease, border-color 180ms ease;
+  }
+  .nav-link:hover {
+    transform: translateX(3px);
+    background: color-mix(in srgb, var(--bg-tertiary) 78%, transparent);
+    border-color: color-mix(in srgb, var(--border-color) 70%, transparent);
+  }
+  .nav-link.active {
+    box-shadow: 0 5px 16px rgb(var(--accent-rgb) / 0.2), inset 0 1px 0 rgb(255 255 255 / 0.18);
+  }
+
+  .input {
+    border-radius: 0.8rem;
+    background: color-mix(in srgb, var(--bg-secondary) 82%, transparent);
+    backdrop-filter: blur(12px);
+    transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+  }
+  .input:focus {
+    background: var(--bg-secondary);
+    box-shadow: 0 0 0 4px rgb(var(--accent-rgb) / 0.11), 0 5px 18px rgb(var(--accent-rgb) / 0.08);
+  }
+}
+
+header.surface {
+  background: color-mix(in srgb, var(--bg-secondary) 72%, transparent);
+  backdrop-filter: saturate(180%) blur(24px);
+  -webkit-backdrop-filter: saturate(180%) blur(24px);
+  box-shadow: 0 1px 0 rgb(15 23 42 / 0.025);
+}
