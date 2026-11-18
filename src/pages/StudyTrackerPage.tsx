@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -350,15 +350,38 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [subjectId, setSubjectId] = useState(session?.subject_id ?? subjects[0]?.id ?? '');
-  const [topicId, setTopicId] = useState(session?.topic_id ?? '');
-  const [title, setTitle] = useState(session?.title ?? '');
-  const [description, setDescription] = useState(session?.description ?? '');
-  const [personalNotes, setPersonalNotes] = useState(session?.personal_notes ?? '');
-  const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? new Date().toISOString().split('T')[0]);
-  const [duration, setDuration] = useState(session?.duration_minutes ?? 60);
-  const [confidence, setConfidence] = useState(session?.confidence ?? 3);
+  const draftKey = `studytrack:study-session-draft:${userId}:${session?.id ?? 'new'}`;
+  const [savedDraft] = useState<Partial<{
+    subjectId: string; topicId: string; title: string; description: string;
+    personalNotes: string; studiedDate: string; duration: number; confidence: number;
+  }>>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(draftKey) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [subjectId, setSubjectId] = useState(session?.subject_id ?? savedDraft.subjectId ?? subjects[0]?.id ?? '');
+  const [topicId, setTopicId] = useState(session?.topic_id ?? savedDraft.topicId ?? '');
+  const [title, setTitle] = useState(session?.title ?? savedDraft.title ?? '');
+  const [description, setDescription] = useState(session?.description ?? savedDraft.description ?? '');
+  const [personalNotes, setPersonalNotes] = useState(session?.personal_notes ?? savedDraft.personalNotes ?? '');
+  const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? savedDraft.studiedDate ?? new Date().toISOString().split('T')[0]);
+  const [duration, setDuration] = useState(session?.duration_minutes ?? savedDraft.duration ?? 60);
+  const [confidence, setConfidence] = useState(session?.confidence ?? savedDraft.confidence ?? 3);
   const [saving, setSaving] = useState(false);
+
+  // Keep unfinished work safe when the page unmounts, the tab changes, or the browser reloads.
+  useEffect(() => {
+    window.localStorage.setItem(draftKey, JSON.stringify({
+      subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence,
+    }));
+  }, [draftKey, subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence]);
+
+  const closeAndDiscardDraft = () => {
+    window.localStorage.removeItem(draftKey);
+    onClose();
+  };
 
   const subjectTopics = topics.filter((t) => t.subject_id === subjectId);
 
@@ -417,12 +440,13 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
       }
     }
 
+    window.localStorage.removeItem(draftKey);
     setSaving(false);
     onSaved();
   };
 
   return (
-    <Modal open onClose={onClose} title={session ? 'Edit study session' : 'Log study session'} size="lg">
+    <Modal open onClose={closeAndDiscardDraft} title={session ? 'Edit study session' : 'Log study session'} size="lg">
       <div className="space-y-4">
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -469,7 +493,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
           <textarea className="input min-h-[60px]" value={personalNotes} onChange={(e) => setPersonalNotes(e.target.value)} placeholder="Any personal notes, things to remember, questions..." />
         </div>
         <div className="flex gap-3 justify-end pt-2">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={closeAndDiscardDraft} className="btn btn-secondary">Cancel</button>
           <button onClick={handleSave} disabled={saving || !title.trim() || !subjectId} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving...' : 'Save session'}
           </button>
