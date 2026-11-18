@@ -232,6 +232,12 @@ export function CalendarPage() {
           defaultDate={selectedDate}
           onClose={() => { setShowModal(false); setSelectedDate(null); }}
           onSaved={() => { setShowModal(false); setSelectedDate(null); data.refresh(); }}
+          onDelete={() => {
+            if (!editing) return;
+            setShowModal(false);
+            setSelectedDate(null);
+            setDeleteId(editing.id);
+          }}
         />
       )}
 
@@ -402,13 +408,14 @@ function DayView({ currentDate, eventsForDate, onEventClick }: {
   );
 }
 
-function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved }: {
+function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved, onDelete }: {
   event: CalendarEvent | null;
   subjects: any[];
   userId: string;
   defaultDate: string | null;
   onClose: () => void;
   onSaved: () => void;
+  onDelete: () => void;
 }) {
   const draftKey = `studytrack:calendar-event-draft:${userId}:${event?.id ?? defaultDate ?? 'new'}`;
   const [savedDraft] = useState<Partial<{
@@ -530,11 +537,18 @@ function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved }: 
           <label className="block text-sm font-medium text-secondary mb-1.5">Description (optional)</label>
           <textarea className="input min-h-[60px]" value={description} onChange={(e) => setDescription(e.target.value)} />
         </div>
-        <div className="flex gap-3 justify-end pt-2">
-          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
-          <button onClick={handleSave} disabled={saving || !title.trim()} className="btn btn-primary disabled:opacity-50">
-            {saving ? 'Saving...' : 'Save event'}
-          </button>
+        <div className="flex gap-3 justify-between pt-2">
+          {event && (
+            <button type="button" onClick={onDelete} className="btn btn-danger">
+              <Trash2 size={15} /> Delete event
+            </button>
+          )}
+          <div className="flex gap-3 ml-auto">
+            <button onClick={closeAndDiscardDraft} className="btn btn-secondary">Cancel</button>
+            <button onClick={handleSave} disabled={saving || !title.trim()} className="btn btn-primary disabled:opacity-50">
+              {saving ? 'Saving...' : 'Save event'}
+            </button>
+          </div>
         </div>
       </div>
     </Modal>
