@@ -410,21 +410,44 @@ function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved }: 
   onClose: () => void;
   onSaved: () => void;
 }) {
-  const [title, setTitle] = useState(event?.title ?? '');
-  const [description, setDescription] = useState(event?.description ?? '');
-  const [eventType, setEventType] = useState<CalendarEvent['event_type']>(event?.event_type ?? 'personal');
+  const draftKey = `studytrack:calendar-event-draft:${userId}:${event?.id ?? defaultDate ?? 'new'}`;
+  const [savedDraft] = useState<Partial<{
+    title: string; description: string; eventType: CalendarEvent['event_type'];
+    startDate: string; startTime: string; endDate: string; endTime: string;
+    allDay: boolean; subjectId: string; location: string;
+  }>>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem(draftKey) ?? '{}');
+    } catch {
+      return {};
+    }
+  });
+  const [title, setTitle] = useState(event?.title ?? savedDraft.title ?? '');
+  const [description, setDescription] = useState(event?.description ?? savedDraft.description ?? '');
+  const [eventType, setEventType] = useState<CalendarEvent['event_type']>(event?.event_type ?? savedDraft.eventType ?? 'personal');
   const [startDate, setStartDate] = useState(
-    event ? event.start_date.slice(0, 10) : (defaultDate ?? new Date().toISOString().split('T')[0])
+    event ? event.start_date.slice(0, 10) : (savedDraft.startDate ?? defaultDate ?? new Date().toISOString().split('T')[0])
   );
-  const [startTime, setStartTime] = useState(event ? new Date(event.start_date).toTimeString().slice(0, 5) : '09:00');
+  const [startTime, setStartTime] = useState(event ? new Date(event.start_date).toTimeString().slice(0, 5) : (savedDraft.startTime ?? '09:00'));
   const [endDate, setEndDate] = useState(
-    event ? event.end_date.slice(0, 10) : (defaultDate ?? new Date().toISOString().split('T')[0])
+    event ? event.end_date.slice(0, 10) : (savedDraft.endDate ?? defaultDate ?? new Date().toISOString().split('T')[0])
   );
-  const [endTime, setEndTime] = useState(event ? new Date(event.end_date).toTimeString().slice(0, 5) : '10:00');
-  const [allDay, setAllDay] = useState(event?.all_day ?? false);
-  const [subjectId, setSubjectId] = useState(event?.subject_id ?? '');
-  const [location, setLocation] = useState(event?.location ?? '');
+  const [endTime, setEndTime] = useState(event ? new Date(event.end_date).toTimeString().slice(0, 5) : (savedDraft.endTime ?? '10:00'));
+  const [allDay, setAllDay] = useState(event?.all_day ?? savedDraft.allDay ?? false);
+  const [subjectId, setSubjectId] = useState(event?.subject_id ?? savedDraft.subjectId ?? '');
+  const [location, setLocation] = useState(event?.location ?? savedDraft.location ?? '');
   const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    window.localStorage.setItem(draftKey, JSON.stringify({
+      title, description, eventType, startDate, startTime, endDate, endTime, allDay, subjectId, location,
+    }));
+  }, [draftKey, title, description, eventType, startDate, startTime, endDate, endTime, allDay, subjectId, location]);
+
+  const closeAndDiscardDraft = () => {
+    window.localStorage.removeItem(draftKey);
+    onClose();
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -446,12 +469,13 @@ function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved }: 
     } else {
       await supabase.from('calendar_events').insert({ ...payload, user_id: userId });
     }
+    window.localStorage.removeItem(draftKey);
     setSaving(false);
     onSaved();
   };
 
   return (
-    <Modal open onClose={onClose} title={event ? 'Edit event' : 'New event'} size="md">
+    <Modal open onClose={closeAndDiscardDraft} title={event ? 'Edit event' : 'New event'} size="md">
       <div className="space-y-4">
         <div>
           <label className="block text-sm font-medium text-secondary mb-1.5">Title</label>
