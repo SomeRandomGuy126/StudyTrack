@@ -153,7 +153,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
         <div className="flex items-center gap-1">
           {minimized && !running && !finished && <button type="button" className="btn-ghost btn !p-1.5" title={elapsedMs > 0 ? "Resume" : "Start"} disabled={!subjectId} onClick={start}><Play size={15} /></button>}
           {minimized && running && <button type="button" className="btn-ghost btn !p-1.5" title="Pause" onClick={pause}><Pause size={15} /></button>}
-          <button type="button" className="btn-ghost btn !p-1.5" title={minimized ? "Expand" : "Minimise"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={16} /> : <Minus size={16} />}</button>
+          <button type="button" className="btn btn-secondary !px-2.5 !py-1.5 text-xs shrink-0" aria-label={minimized ? "Expand timer" : "Minimise timer"} title={minimized ? "Expand timer" : "Minimise timer"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={14} /> : <Minus size={14} />}{minimized ? "Expand" : "Minimise"}</button>
           {canRemove && !running && elapsedMs === 0 && <button type="button" className="btn-ghost btn !p-1.5 text-red-500" title="Remove empty timer" onClick={onRemove}><Trash2 size={15} /></button>}
         </div>
       </div>
