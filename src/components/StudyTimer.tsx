@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Subject, Topic } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, X, Move, Maximize2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, Move, Maximize2 } from 'lucide-react';
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
@@ -30,7 +30,6 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [closed, setClosed] = useState(false);
   const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
   const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
@@ -119,15 +118,12 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
 
   const disabledSettings = running || elapsedMs > 0 || finished;
 
-  if (closed) return <button type="button" onClick={() => setClosed(false)} className="fixed bottom-5 right-5 z-[80] btn btn-primary shadow-2xl rounded-full"><TimerIcon size={17} /> {running ? "Timer running" : "Study timer"}</button>;
-
   return (
     <section className="fixed z-[80] w-[min(420px,calc(100vw-24px))] max-h-[calc(100vh-24px)] overflow-y-auto card shadow-2xl p-4" style={position ? { left: position.x, top: position.y } : { right: 20, bottom: 20 }}>
       <div className="flex items-center justify-between gap-2 mb-3 cursor-move select-none touch-none" onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
         <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Move size={15} /> Study timer <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
         <div className="flex items-center gap-1">
           <button type="button" className="btn-ghost btn !p-1.5" title={minimized ? "Expand" : "Minimise"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={16} /> : <Minus size={16} />}</button>
-          <button type="button" className="btn-ghost btn !p-1.5" title="Close panel (timer keeps running)" onClick={() => setClosed(true)}><X size={16} /></button>
         </div>
       </div>
       {!minimized && <>
