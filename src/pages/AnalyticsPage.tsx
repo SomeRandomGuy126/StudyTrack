@@ -11,16 +11,17 @@ import {
 export function AnalyticsPage() {
   const data = useUserData();
   const { profile } = useAuth();
+  const timerSessions = data.studySessions.filter((session) => session.tracking_method === 'timer');
 
   const stats = useMemo(() => {
-    const totalMinutes = data.studySessions.reduce((sum, s) => sum + s.duration_minutes, 0);
-    const weekMinutes = data.studySessions.filter((s) => isThisWeek(s.studied_date)).reduce((sum, s) => sum + s.duration_minutes, 0);
+    const totalMinutes = timerSessions.reduce((sum, s) => sum + s.duration_minutes, 0);
+    const weekMinutes = timerSessions.filter((s) => isThisWeek(s.studied_date)).reduce((sum, s) => sum + s.duration_minutes, 0);
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const monthMinutes = data.studySessions.filter((s) => new Date(s.studied_date) >= monthStart).reduce((sum, s) => sum + s.duration_minutes, 0);
+    const monthMinutes = timerSessions.filter((s) => new Date(s.studied_date) >= monthStart).reduce((sum, s) => sum + s.duration_minutes, 0);
     const completedRevisions = data.revisions.filter((r) => r.status === 'completed').length;
     const overdueCount = data.revisions.filter((r) => r.status === 'due' && new Date(r.next_due_date) < new Date()).length;
-    const topicsStudied = new Set(data.studySessions.filter((s) => s.topic_id).map((s) => s.topic_id)).size;
+    const topicsStudied = new Set(timerSessions.filter((s) => s.topic_id).map((s) => s.topic_id)).size;
 
     // Last 7 days study time
     const last7Days: { date: Date; minutes: number; label: string }[] = [];
@@ -28,7 +29,7 @@ export function AnalyticsPage() {
       const d = new Date();
       d.setDate(d.getDate() - i);
       d.setHours(0, 0, 0, 0);
-      const dayMinutes = data.studySessions
+      const dayMinutes = timerSessions
         .filter((s) => {
           const sd = new Date(s.studied_date);
           return sd.toDateString() === d.toDateString();
@@ -39,7 +40,7 @@ export function AnalyticsPage() {
 
     // Study time by subject
     const subjectStats = data.subjects.map((subject) => {
-      const sessions = data.studySessions.filter((s) => s.subject_id === subject.id);
+      const sessions = timerSessions.filter((s) => s.subject_id === subject.id);
       const minutes = sessions.reduce((sum, s) => sum + s.duration_minutes, 0);
       const avgConfidence = sessions.length > 0 ? sessions.reduce((sum, s) => sum + s.confidence, 0) / sessions.length : 0;
       const revisions = data.revisions.filter((r) => r.subject_id === subject.id);
@@ -51,7 +52,7 @@ export function AnalyticsPage() {
 
     // Confidence distribution
     const confidenceDist = [0, 0, 0, 0, 0];
-    data.studySessions.forEach((s) => { confidenceDist[s.confidence - 1]++; });
+    timerSessions.forEach((s) => { confidenceDist[s.confidence - 1]++; });
 
     // Revision performance over last 10 completed
     const recentRevisions = data.revisions
@@ -65,7 +66,7 @@ export function AnalyticsPage() {
     for (let i = 5; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
-      const minutes = data.studySessions
+      const minutes = timerSessions
         .filter((s) => {
           const sd = new Date(s.studied_date);
           return sd >= d && sd < nextMonth;
@@ -77,7 +78,7 @@ export function AnalyticsPage() {
     return {
       totalMinutes, weekMinutes, monthMinutes, completedRevisions, overdueCount, topicsStudied,
       last7Days, subjectStats, confidenceDist, recentRevisions, monthlyData,
-      totalSessions: data.studySessions.length,
+      totalSessions: timerSessions.length,
     };
   }, [data]);
 
@@ -95,7 +96,7 @@ export function AnalyticsPage() {
         <p className="text-secondary text-sm mt-1">Track your study progress and identify areas needing attention</p>
       </div>
 
-      {data.studySessions.length === 0 && data.revisions.length === 0 ? (
+      {timerSessions.length === 0 && data.revisions.length === 0 ? (
         <div className="card">
           <EmptyState
             icon={<BarChart3 size={48} />}
@@ -222,7 +223,7 @@ export function AnalyticsPage() {
               <div className="space-y-3">
                 {CONFIDENCE_LEVELS.map((c, i) => {
                   const count = stats.confidenceDist[i];
-                  const total = data.studySessions.length || 1;
+                  const total = timerSessions.length || 1;
                   const pct = (count / total) * 100;
                   return (
                     <div key={c.value}>
