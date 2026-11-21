@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Subject, Topic } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass } from 'lucide-react';
+import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, X, Move, Maximize2 } from 'lucide-react';
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
@@ -29,8 +29,25 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  const [closed, setClosed] = useState(false);
+  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
+  const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
 
   const targetMs = Math.max(1, minutes) * 60_000;
+  const beginDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if ((event.target as HTMLElement).closest('button')) return;
+    const rect = event.currentTarget.parentElement!.getBoundingClientRect();
+    dragRef.current = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  };
+  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (!dragRef.current) return;
+    const left = Math.max(8, Math.min(window.innerWidth - 120, dragRef.current.left + event.clientX - dragRef.current.x));
+    const top = Math.max(8, Math.min(window.innerHeight - 64, dragRef.current.top + event.clientY - dragRef.current.y));
+    setPosition({ x: left, y: top });
+  };
+  const endDrag = () => { dragRef.current = null; };
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
   const subjectTopics = useMemo(() => topics.filter((topic) => topic.subject_id === subjectId), [topics, subjectId]);
@@ -102,8 +119,18 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
 
   const disabledSettings = running || elapsedMs > 0 || finished;
 
+  if (closed) return <button type="button" onClick={() => setClosed(false)} className="fixed bottom-5 right-5 z-[80] btn btn-primary shadow-2xl rounded-full"><TimerIcon size={17} /> {running ? "Timer running" : "Study timer"}</button>;
+
   return (
-    <section className="card p-5 lg:p-6 mb-6">
+    <section className="fixed z-[80] w-[min(420px,calc(100vw-24px))] max-h-[calc(100vh-24px)] overflow-y-auto card shadow-2xl p-4" style={position ? { left: position.x, top: position.y } : { right: 20, bottom: 20 }}>
+      <div className="flex items-center justify-between gap-2 mb-3 cursor-move select-none touch-none" onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
+        <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Move size={15} /> Study timer <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
+        <div className="flex items-center gap-1">
+          <button type="button" className="btn-ghost btn !p-1.5" title={minimized ? "Expand" : "Minimise"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={16} /> : <Minus size={16} />}</button>
+          <button type="button" className="btn-ghost btn !p-1.5" title="Close panel (timer keeps running)" onClick={() => setClosed(true)}><X size={16} /></button>
+        </div>
+      </div>
+      {!minimized && <>
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
         <div>
           <div className="flex items-center gap-2">
@@ -163,6 +190,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
         </div>
         {elapsedMs > 0 && elapsedMs < 60_000 && !running && <p className="text-xs text-tertiary mt-3">Study for at least one minute to save a session.</p>}
       </div>
+      </>}
     </section>
   );
 }
