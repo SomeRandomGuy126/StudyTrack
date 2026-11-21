@@ -129,6 +129,8 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
       <div className="flex items-center justify-between gap-2 mb-3 select-none">
         <div className="flex items-center gap-2 text-sm font-semibold text-primary"> <TimerIcon size={15} /> Timer {timerNumber} <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
         <div className="flex items-center gap-1">
+          {minimized && !running && !finished && <button type="button" className="btn-ghost btn !p-1.5" title={elapsedMs > 0 ? "Resume" : "Start"} disabled={!subjectId} onClick={start}><Play size={15} /></button>}
+          {minimized && running && <button type="button" className="btn-ghost btn !p-1.5" title="Pause" onClick={pause}><Pause size={15} /></button>}
           <button type="button" className="btn-ghost btn !p-1.5" title={minimized ? "Expand" : "Minimise"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={16} /> : <Minus size={16} />}</button>
           {canRemove && !running && elapsedMs === 0 && <button type="button" className="btn-ghost btn !p-1.5 text-red-500" title="Remove empty timer" onClick={onRemove}><Trash2 size={15} /></button>}
         </div>
