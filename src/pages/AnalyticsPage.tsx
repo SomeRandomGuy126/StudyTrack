@@ -15,6 +15,9 @@ export function AnalyticsPage() {
 
   const stats = useMemo(() => {
     const totalMinutes = timerSessions.reduce((sum, s) => sum + s.duration_minutes, 0);
+    const todayMinutes = timerSessions.filter((s) => isToday(s.studied_date)).reduce((sum, s) => sum + s.duration_minutes, 0);
+    const yearStart = new Date(new Date().getFullYear(), 0, 1);
+    const yearMinutes = timerSessions.filter((s) => new Date(s.studied_date) >= yearStart).reduce((sum, s) => sum + s.duration_minutes, 0);
     const weekMinutes = timerSessions.filter((s) => isThisWeek(s.studied_date)).reduce((sum, s) => sum + s.duration_minutes, 0);
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -76,7 +79,7 @@ export function AnalyticsPage() {
     }
 
     return {
-      totalMinutes, weekMinutes, monthMinutes, completedRevisions, overdueCount, topicsStudied,
+      totalMinutes, todayMinutes, weekMinutes, monthMinutes, yearMinutes, completedRevisions, overdueCount, topicsStudied,
       last7Days, subjectStats, confidenceDist, recentRevisions, monthlyData,
       totalSessions: timerSessions.length,
     };
@@ -101,15 +104,18 @@ export function AnalyticsPage() {
           <EmptyState
             icon={<BarChart3 size={48} />}
             title="No data to analyse yet"
-            description="Log study sessions and complete revisions to see your analytics here."
+            description="Start a stopwatch or countdown to build your study-time analytics. Revision statistics remain available separately."
           />
         </div>
       ) : (
         <div className="space-y-6">
           {/* Top stat cards */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={<Clock size={20} />} label="Total study time" value={formatDuration(stats.totalMinutes)} color="#3b82f6" />
+            <StatCard icon={<Clock size={20} />} label="Today" value={formatDuration(stats.todayMinutes)} color="#3b82f6" />
+            <StatCard icon={<Calendar size={20} />} label="This week" value={formatDuration(stats.weekMinutes)} color="#0ea5e9" />
             <StatCard icon={<Calendar size={20} />} label="This month" value={formatDuration(stats.monthMinutes)} color="#22c55e" />
+            <StatCard icon={<TrendingUp size={20} />} label="This year" value={formatDuration(stats.yearMinutes)} color="#8b5cf6" />
+            <StatCard icon={<Clock size={20} />} label="All-time study" value={formatDuration(stats.totalMinutes)} color="#3b82f6" />
             <StatCard icon={<RefreshCw size={20} />} label="Revisions done" value={String(stats.completedRevisions)} color="#8b5cf6" />
             <StatCard icon={<AlertTriangle size={20} />} label="Overdue topics" value={String(stats.overdueCount)} color="#ef4444" alert={stats.overdueCount > 0} />
           </div>
