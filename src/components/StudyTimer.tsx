@@ -85,7 +85,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
       title: title.trim() || selectedTopic?.name || 'Study session',
       description: mode === 'countdown' ? `Countdown target: ${minutes} minutes` : 'Stopwatch session',
       personal_notes: null,
-      studied_date: new Date().toISOString().slice(0, 10),
+      studied_date: (() => { const date = new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); })(),
       duration_minutes: duration,
       confidence,
       tracking_method: 'timer',
