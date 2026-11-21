@@ -16,7 +16,18 @@ function formatClock(ms: number) {
 }
 
 export function StudyTimer(props: Props) {
-  const [timerIds, setTimerIds] = useState<number[]>([1]);
+  const { user } = useAuth();
+  const storageKey = `studytrack:timers:${user?.id ?? 'guest'}`;
+  const [timerIds, setTimerIds] = useState<number[]>(() => {
+    try {
+      const saved = window.localStorage.getItem(storageKey);
+      const parsed = saved ? JSON.parse(saved) : [1];
+      return Array.isArray(parsed) && parsed.length ? parsed.slice(0, 10) : [1];
+    } catch { return [1]; }
+  });
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, JSON.stringify(timerIds));
+  }, [storageKey, timerIds]);
   const addTimer = () => setTimerIds((ids) => ids.length >= 10 ? ids : [...ids, Math.max(0, ...ids) + 1]);
   const removeTimer = (id: number) => setTimerIds((ids) => ids.length <= 1 ? ids : ids.filter((item) => item !== id));
   return (
@@ -24,13 +35,13 @@ export function StudyTimer(props: Props) {
       <div className="flex items-center justify-between gap-3 mb-4">
         <div>
           <h2 className="font-semibold text-primary">Study timers</h2>
-          <p className="text-xs text-secondary mt-1">Timers stay here when minimised. {timerIds.length}/10 created.</p>
+          <p className="text-xs text-secondary mt-1">{timerIds.length} of 10 timers</p>
         </div>
         <button type="button" onClick={addTimer} disabled={timerIds.length >= 10} className="btn btn-primary disabled:opacity-50">
           <Plus size={16} /> Add timer
         </button>
       </div>
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         {timerIds.map((id, index) => <TimerInstance key={id} {...props} timerNumber={index + 1} onRemove={() => removeTimer(id)} canRemove={timerIds.length > 1} />)}
       </div>
     </section>
@@ -39,19 +50,30 @@ export function StudyTimer(props: Props) {
 
 function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRemove }: Props & { timerNumber: number; onRemove: () => void; canRemove: boolean }) {
   const { user } = useAuth();
-  const [mode, setMode] = useState<Mode>('stopwatch');
-  const [minutes, setMinutes] = useState(60);
-  const [subjectId, setSubjectId] = useState(subjects[0]?.id ?? '');
-  const [topicId, setTopicId] = useState('');
-  const [title, setTitle] = useState('');
-  const [confidence, setConfidence] = useState(3);
-  const [elapsedMs, setElapsedMs] = useState(0);
+  const storageKey = `studytrack:timer:${user?.id ?? 'guest'}:${timerNumber}`;
+  const [savedState] = useState(() => {
+    try { return JSON.parse(window.localStorage.getItem(storageKey) ?? '{}'); }
+    catch { return {}; }
+  });
+  const [mode, setMode] = useState<Mode>(savedState.mode ?? 'stopwatch');
+  const [minutes, setMinutes] = useState(savedState.minutes ?? 60);
+  const [subjectId, setSubjectId] = useState(savedState.subjectId ?? subjects[0]?.id ?? '');
+  const [topicId, setTopicId] = useState(savedState.topicId ?? '');
+  const [title, setTitle] = useState(savedState.title ?? '');
+  const [confidence, setConfidence] = useState(savedState.confidence ?? 3);
+  const [elapsedMs, setElapsedMs] = useState(savedState.elapsedMs ?? 0);
   const [now, setNow] = useState(Date.now());
-  const [startedAt, setStartedAt] = useState<number | null>(null);
-  const [running, setRunning] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(savedState.startedAt ?? null);
+  const [running, setRunning] = useState(savedState.running ?? false);
   const [saving, setSaving] = useState(false);
-  const [finished, setFinished] = useState(false);
-  const [minimized, setMinimized] = useState(false);
+  const [finished, setFinished] = useState(savedState.finished ?? false);
+  const [minimized, setMinimized] = useState(savedState.minimized ?? false);
+
+  useEffect(() => {
+    window.localStorage.setItem(storageKey, JSON.stringify({
+      mode, minutes, subjectId, topicId, title, confidence, elapsedMs, startedAt, running, finished, minimized,
+    }));
+  }, [storageKey, mode, minutes, subjectId, topicId, title, confidence, elapsedMs, startedAt, running, finished, minimized]);
   const targetMs = Math.max(1, minutes) * 60_000;
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
@@ -125,9 +147,9 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
   const disabledSettings = running || elapsedMs > 0 || finished;
 
   return (
-    <section className="card p-3 min-w-0">
+    <section className="card p-4 min-w-0 overflow-hidden">
       <div className="flex items-center justify-between gap-2 mb-3 select-none">
-        <div className="flex items-center gap-2 text-sm font-semibold text-primary"> <TimerIcon size={15} /> Timer {timerNumber} <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-primary"><TimerIcon size={15} /><span>Timer {timerNumber}</span><span className="font-mono text-brand-500 tabular-nums">{formatClock(shownMs)}</span></div>
         <div className="flex items-center gap-1">
           {minimized && !running && !finished && <button type="button" className="btn-ghost btn !p-1.5" title={elapsedMs > 0 ? "Resume" : "Start"} disabled={!subjectId} onClick={start}><Play size={15} /></button>}
           {minimized && running && <button type="button" className="btn-ghost btn !p-1.5" title="Pause" onClick={pause}><Pause size={15} /></button>}
@@ -136,15 +158,14 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
         </div>
       </div>
       {!minimized && <>
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
+      <div className="flex flex-col gap-3 mb-4 min-w-0">
         <div>
           <div className="flex items-center gap-2">
             <TimerIcon size={19} className="text-brand-500" />
             <h2 className="font-semibold text-primary text-lg">Timer {timerNumber}</h2>
           </div>
-          <p className="text-sm text-secondary mt-1">Only time recorded here contributes to your study totals.</p>
         </div>
-        <div className="flex gap-1 surface rounded-lg p-1">
+        <div className="flex flex-wrap gap-1 surface rounded-lg p-1 w-fit max-w-full">
           <button type="button" disabled={disabledSettings} onClick={() => { setMode('stopwatch'); reset(); }} className={`btn text-sm ${mode === 'stopwatch' ? 'btn-primary' : 'btn-ghost'}`}>
             <Hourglass size={15} /> Stopwatch
           </button>
@@ -154,7 +175,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
         </div>
       </div>
 
-      <div className="grid md:grid-cols-2 gap-3 mb-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 min-w-0">
         <label className="text-sm text-secondary">Subject
           <select className="input mt-1" value={subjectId} disabled={disabledSettings} onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); }}>
             {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
@@ -166,7 +187,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
             {subjectTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}
           </select>
         </label>
-        <label className="text-sm text-secondary md:col-span-2">Session name (optional)
+        <label className="text-sm text-secondary sm:col-span-2">Session name (optional)
           <input className="input mt-1" value={title} disabled={disabledSettings} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Cell recognition and antigens" />
         </label>
         {mode === 'countdown' && (
@@ -181,9 +202,9 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRe
         </label>
       </div>
 
-      <div className="rounded-xl surface-tertiary p-5 text-center">
+      <div className="rounded-xl surface-tertiary p-4 sm:p-5 text-center min-w-0">
         <div className="text-xs uppercase tracking-wider text-tertiary mb-2">{finished ? 'Time is up' : running ? 'Timer running' : elapsedMs > 0 ? 'Paused' : mode === 'stopwatch' ? 'Ready when you are' : 'Countdown ready'}</div>
-        <div className="font-mono text-4xl sm:text-5xl font-bold text-primary tabular-nums" aria-live="off">{formatClock(shownMs)}</div>
+        <div className="font-mono text-3xl sm:text-4xl font-bold text-primary tabular-nums break-all" aria-live="off">{formatClock(shownMs)}</div>
         {mode === 'countdown' && <p className="text-xs text-tertiary mt-2">{formatClock(actualMs)} studied so far</p>}
         <div className="flex flex-wrap justify-center gap-2 mt-5">
           {!running && !finished && (
