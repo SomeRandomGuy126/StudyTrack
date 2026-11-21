@@ -293,7 +293,7 @@ export function AppShell() {
         </header>
 
         <main className="flex-1 overflow-y-auto">
-          <div key={page} className="animate-fade-in">{renderPage()}</div>
+          <div className="min-w-0">{renderPage()}</div>
         </main>
       </div>
 
