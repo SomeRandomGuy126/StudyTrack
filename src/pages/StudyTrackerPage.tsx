@@ -3,6 +3,7 @@ import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
+import { StudyTimer } from '@/components/StudyTimer';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
 import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate } from '@/lib/spacedRepetition';
 import type { StudySession } from '@/lib/supabase';
@@ -67,6 +68,8 @@ export function StudyTrackerPage() {
           <p className="text-secondary text-sm mt-1">Track focused study time with a stopwatch or countdown</p>
         </div>
       </div>
+
+      <StudyTimer subjects={data.subjects} topics={data.topics} onSaved={data.refresh} />
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
