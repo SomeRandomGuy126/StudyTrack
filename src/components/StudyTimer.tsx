@@ -42,15 +42,15 @@ export function StudyTimer(props: Props) {
         </button>
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {timerIds.map((id, index) => <TimerInstance key={id} {...props} timerNumber={index + 1} onRemove={() => removeTimer(id)} canRemove={timerIds.length > 1} />)}
+        {timerIds.map((id, index) => <TimerInstance key={id} {...props} timerNumber={index + 1} timerId={id} onRemove={() => removeTimer(id)} canRemove={timerIds.length > 1} />)}
       </div>
     </section>
   );
 }
 
-function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRemove }: Props & { timerNumber: number; onRemove: () => void; canRemove: boolean }) {
+function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemove, canRemove }: Props & { timerNumber: number; timerId: number; onRemove: () => void; canRemove: boolean }) {
   const { user } = useAuth();
-  const storageKey = `studytrack:timer:${user?.id ?? 'guest'}:${timerNumber}`;
+  const storageKey = `studytrack:timer:${user?.id ?? 'guest'}:${timerId}`;
   const [savedState] = useState(() => {
     try { return JSON.parse(window.localStorage.getItem(storageKey) ?? '{}'); }
     catch { return {}; }
