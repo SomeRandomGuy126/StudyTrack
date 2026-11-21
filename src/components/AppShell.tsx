@@ -19,8 +19,6 @@ import { AnalyticsPage } from '@/pages/AnalyticsPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { LearningCentrePage } from '@/pages/LearningCentrePage';
 import { AIAssistant } from '@/components/AIAssistant';
-import { StudyTimer } from '@/components/StudyTimer';
-import { useUserData } from '@/hooks/useUserData';
 
 type Page =
   | 'dashboard' | 'learning' | 'subjects' | 'study' | 'revision' | 'tasks'
@@ -48,7 +46,6 @@ const NAV_ITEMS: { id: Page; label: string; icon: typeof LayoutDashboard }[] = [
 
 export function AppShell() {
   const { profile, user, signOut } = useAuth();
-  const timerData = useUserData();
   const { theme, toggleTheme } = useTheme();
   const [page, setPage] = useState<Page>('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -302,7 +299,6 @@ export function AppShell() {
 
       {/* AI Assistant drawer */}
       <AIAssistant open={aiOpen} onClose={() => setAiOpen(false)} />
-      <StudyTimer subjects={timerData.subjects} topics={timerData.topics} onSaved={timerData.refresh} />
     </div>
   );
 }
