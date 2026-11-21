@@ -63,6 +63,7 @@ export type StudySession = {
   personal_notes: string | null;
   studied_date: string;
   duration_minutes: number;
+  tracking_method: 'manual' | 'timer';
   confidence: number;
   attachment_url: string | null;
   created_at: string;
