@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Subject, Topic } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Stopwatch } from 'lucide-react';
+import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass } from 'lucide-react';
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
@@ -114,7 +114,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
         </div>
         <div className="flex gap-1 surface rounded-lg p-1">
           <button type="button" disabled={disabledSettings} onClick={() => { setMode('stopwatch'); reset(); }} className={`btn text-sm ${mode === 'stopwatch' ? 'btn-primary' : 'btn-ghost'}`}>
-            <Stopwatch size={15} /> Stopwatch
+            <Hourglass size={15} /> Stopwatch
           </button>
           <button type="button" disabled={disabledSettings} onClick={() => { setMode('countdown'); reset(); }} className={`btn text-sm ${mode === 'countdown' ? 'btn-primary' : 'btn-ghost'}`}>
             <TimerIcon size={15} /> Countdown
