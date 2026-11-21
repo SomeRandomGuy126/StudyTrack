@@ -737,7 +737,8 @@ function extractNestedSubtopicRequest(
     .filter(Boolean);
   if (quotedNames.length < 3 || quotedNames.length > 12) return null;
 
-  const lastQuoted = [...text.matchAll(/["'“”‘’]([^"'“”‘’]+)["'“”‘’]/g)].at(-1);
+  const quotedMatches = [...text.matchAll(/["'“”‘’]([^"'“”‘’]+)["'“”‘’]/g)];
+  const lastQuoted = quotedMatches[quotedMatches.length - 1];
   if (!lastQuoted || lastQuoted.index === undefined) return null;
   const subjectMatch = text.slice(lastQuoted.index + lastQuoted[0].length).match(/^\s+in\s+(.+?)\s*$/i);
   if (!subjectMatch) return null;
