@@ -2,12 +2,13 @@ import { useState, useMemo, useEffect } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
+import { StudyTimer } from '@/components/StudyTimer';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
 import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate } from '@/lib/spacedRepetition';
 import type { StudySession } from '@/lib/supabase';
 import {
-  Clock, Plus, List, Table as TableIcon, Calendar as CalIcon, BookOpen,
+  Clock, List, Table as TableIcon, Calendar as CalIcon, BookOpen,
   Edit2, Trash2, Search
 } from 'lucide-react';
 
@@ -54,12 +55,11 @@ export function StudyTrackerPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-bold text-primary">Study Tracker</h1>
-          <p className="text-secondary text-sm mt-1">Record every lesson and study session</p>
+          <p className="text-secondary text-sm mt-1">Track focused study time with a stopwatch or countdown</p>
         </div>
-        <button onClick={() => { setEditing(null); setShowModal(true); }} className="btn btn-primary">
-          <Plus size={16} /> Log study session
-        </button>
       </div>
+
+      <StudyTimer subjects={data.subjects} topics={data.topics} onSaved={data.refresh} />
 
       {/* Controls */}
       <div className="flex flex-col sm:flex-row gap-3 mb-4">
@@ -89,8 +89,7 @@ export function StudyTrackerPage() {
           <EmptyState
             icon={<Clock size={48} />}
             title="No study sessions yet"
-            description="Log your first study session to start tracking your progress and building revision schedules."
-            action={<button onClick={() => setShowModal(true)} className="btn btn-primary"><Plus size={16} /> Log study session</button>}
+            description="Start a stopwatch or countdown above. Completed timer sessions will appear here."
           />
         </div>
       ) : view === 'list' ? (
