@@ -21,6 +21,7 @@ export function StudyTrackerPage() {
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<StudySession | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [search, setSearch] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
 
@@ -41,6 +42,15 @@ export function StudyTrackerPage() {
     await supabase.from('study_sessions').delete().eq('id', deleteId);
     setDeleteId(null);
     data.refresh();
+  };
+
+  const handleClearHistory = async () => {
+    if (!user) return;
+    const { error } = await supabase.from('study_sessions').delete().eq('user_id', user.id);
+    if (!error) {
+      setConfirmClearHistory(false);
+      data.refresh();
+    }
   };
 
   const views = [
@@ -71,6 +81,9 @@ export function StudyTrackerPage() {
           <option value="all">All subjects</option>
           {data.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        {data.studySessions.length > 0 && (
+          <button type="button" onClick={() => setConfirmClearHistory(true)} className="btn btn-secondary text-red-500">Clear history</button>
+        )}
         <div className="flex gap-1 surface rounded-lg p-1">
           {views.map((v) => (
             <button
@@ -112,6 +125,15 @@ export function StudyTrackerPage() {
           onSaved={() => { setShowModal(false); data.refresh(); }}
         />
       )}
+
+      <ConfirmDialog
+        open={confirmClearHistory}
+        onClose={() => setConfirmClearHistory(false)}
+        onConfirm={handleClearHistory}
+        title="Clear all study history?"
+        message="This permanently deletes every saved study session, including timer sessions. This cannot be undone."
+        confirmLabel="Clear all history"
+      />
 
       <ConfirmDialog
         open={!!deleteId}
