@@ -56,18 +56,18 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     catch { return {}; }
   });
   const [mode, setMode] = useState<Mode>(savedState.mode ?? 'stopwatch');
-  const [minutes, setMinutes] = useState(savedState.minutes ?? 60);
-  const [subjectId, setSubjectId] = useState(savedState.subjectId ?? subjects[0]?.id ?? '');
-  const [topicId, setTopicId] = useState(savedState.topicId ?? '');
-  const [title, setTitle] = useState(savedState.title ?? '');
-  const [confidence, setConfidence] = useState(savedState.confidence ?? 3);
-  const [elapsedMs, setElapsedMs] = useState(savedState.elapsedMs ?? 0);
+  const [minutes, setMinutes] = useState<number>(savedState.minutes ?? 60);
+  const [subjectId, setSubjectId] = useState<string>(savedState.subjectId ?? subjects[0]?.id ?? '');
+  const [topicId, setTopicId] = useState<string>(savedState.topicId ?? '');
+  const [title, setTitle] = useState<string>(savedState.title ?? '');
+  const [confidence, setConfidence] = useState<number>(savedState.confidence ?? 3);
+  const [elapsedMs, setElapsedMs] = useState<number>(savedState.elapsedMs ?? 0);
   const [now, setNow] = useState(Date.now());
   const [startedAt, setStartedAt] = useState<number | null>(savedState.startedAt ?? null);
-  const [running, setRunning] = useState(savedState.running ?? false);
+  const [running, setRunning] = useState<boolean>(savedState.running ?? false);
   const [saving, setSaving] = useState(false);
-  const [finished, setFinished] = useState(savedState.finished ?? false);
-  const [minimized, setMinimized] = useState(savedState.minimized ?? false);
+  const [finished, setFinished] = useState<boolean>(savedState.finished ?? false);
+  const [minimized, setMinimized] = useState<boolean>(savedState.minimized ?? false);
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify({
