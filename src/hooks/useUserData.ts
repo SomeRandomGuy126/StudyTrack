@@ -5,22 +5,56 @@ import type { Subject, Topic, StudySession, Revision, Task, Project, Note, Flash
 
 const DATA_REFRESH_EVENT = 'studytrack:data-refresh';
 
+type CachedUserData = {
+  timestamp: number;
+  subjects: Subject[];
+  topics: Topic[];
+  studySessions: StudySession[];
+  revisions: Revision[];
+  tasks: Task[];
+  projects: Project[];
+  notes: Note[];
+  flashcards: Flashcard[];
+  events: CalendarEvent[];
+};
+
+// Page navigation remounts page components. Reuse recently loaded data instead
+// of firing nine database queries every time the user changes sections.
+const USER_DATA_CACHE = new Map<string, CachedUserData>();
+const CACHE_TTL_MS = 60_000;
+
 export function useUserData() {
   const { user } = useAuth();
   const instanceId = useId();
-  const [subjects, setSubjects] = useState<Subject[]>([]);
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [studySessions, setStudySessions] = useState<StudySession[]>([]);
-  const [revisions, setRevisions] = useState<Revision[]>([]);
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [notes, setNotes] = useState<Note[]>([]);
-  const [flashcards, setFlashcards] = useState<Flashcard[]>([]);
-  const [events, setEvents] = useState<CalendarEvent[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cached = user?.id ? USER_DATA_CACHE.get(user.id) : undefined;
+  const cacheIsFresh = !!cached && Date.now() - cached.timestamp < CACHE_TTL_MS;
+  const [subjects, setSubjects] = useState<Subject[]>(cached?.subjects ?? []);
+  const [topics, setTopics] = useState<Topic[]>(cached?.topics ?? []);
+  const [studySessions, setStudySessions] = useState<StudySession[]>(cached?.studySessions ?? []);
+  const [revisions, setRevisions] = useState<Revision[]>(cached?.revisions ?? []);
+  const [tasks, setTasks] = useState<Task[]>(cached?.tasks ?? []);
+  const [projects, setProjects] = useState<Project[]>(cached?.projects ?? []);
+  const [notes, setNotes] = useState<Note[]>(cached?.notes ?? []);
+  const [flashcards, setFlashcards] = useState<Flashcard[]>(cached?.flashcards ?? []);
+  const [events, setEvents] = useState<CalendarEvent[]>(cached?.events ?? []);
+  const [loading, setLoading] = useState(!cacheIsFresh);
 
   const loadAll = useCallback(async (showLoading = false) => {
     if (!user) return;
+    const recent = USER_DATA_CACHE.get(user.id);
+    if (showLoading && recent && Date.now() - recent.timestamp < CACHE_TTL_MS) {
+      setSubjects(recent.subjects);
+      setTopics(recent.topics);
+      setStudySessions(recent.studySessions);
+      setRevisions(recent.revisions);
+      setTasks(recent.tasks);
+      setProjects(recent.projects);
+      setNotes(recent.notes);
+      setFlashcards(recent.flashcards);
+      setEvents(recent.events);
+      setLoading(false);
+      return;
+    }
     if (showLoading) setLoading(true);
     const [subs, tops, studies, revs, tsk, proj, nts, fcs, evs] = await Promise.all([
       supabase.from('subjects').select('*').order('position'),
@@ -34,15 +68,28 @@ export function useUserData() {
       supabase.from('calendar_events').select('*, subject:subjects(*)').order('start_date'),
     ]);
 
-    setSubjects(subs.data as Subject[] ?? []);
-    setTopics(tops.data as Topic[] ?? []);
-    setStudySessions(studies.data as StudySession[] ?? []);
-    setRevisions(revs.data as Revision[] ?? []);
-    setTasks(tsk.data as Task[] ?? []);
-    setProjects(proj.data as Project[] ?? []);
-    setNotes(nts.data as Note[] ?? []);
-    setFlashcards(fcs.data as Flashcard[] ?? []);
-    setEvents(evs.data as CalendarEvent[] ?? []);
+    const nextData: CachedUserData = {
+      timestamp: Date.now(),
+      subjects: (subs.data ?? []) as Subject[],
+      topics: (tops.data ?? []) as Topic[],
+      studySessions: (studies.data ?? []) as StudySession[],
+      revisions: (revs.data ?? []) as Revision[],
+      tasks: (tsk.data ?? []) as Task[],
+      projects: (proj.data ?? []) as Project[],
+      notes: (nts.data ?? []) as Note[],
+      flashcards: (fcs.data ?? []) as Flashcard[],
+      events: (evs.data ?? []) as CalendarEvent[],
+    };
+    USER_DATA_CACHE.set(user.id, nextData);
+    setSubjects(nextData.subjects);
+    setTopics(nextData.topics);
+    setStudySessions(nextData.studySessions);
+    setRevisions(nextData.revisions);
+    setTasks(nextData.tasks);
+    setProjects(nextData.projects);
+    setNotes(nextData.notes);
+    setFlashcards(nextData.flashcards);
+    setEvents(nextData.events);
     setLoading(false);
   }, [user]);
 
