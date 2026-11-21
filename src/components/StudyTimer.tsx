@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import type { Subject, Topic } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
-import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, Move, Maximize2, X } from 'lucide-react';
+import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, Maximize2, Plus, Trash2 } from 'lucide-react';
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
@@ -15,7 +15,29 @@ function formatClock(ms: number) {
   return [h, m, s].map((n) => String(n).padStart(2, '0')).join(':');
 }
 
-export function StudyTimer({ subjects, topics, onSaved }: Props) {
+export function StudyTimer(props: Props) {
+  const [timerIds, setTimerIds] = useState<number[]>([1]);
+  const addTimer = () => setTimerIds((ids) => ids.length >= 10 ? ids : [...ids, Math.max(0, ...ids) + 1]);
+  const removeTimer = (id: number) => setTimerIds((ids) => ids.length <= 1 ? ids : ids.filter((item) => item !== id));
+  return (
+    <section className="mb-6 rounded-xl border border-app p-4">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="font-semibold text-primary">Study timers</h2>
+          <p className="text-xs text-secondary mt-1">Timers stay here when minimised. {timerIds.length}/10 created.</p>
+        </div>
+        <button type="button" onClick={addTimer} disabled={timerIds.length >= 10} className="btn btn-primary disabled:opacity-50">
+          <Plus size={16} /> Add timer
+        </button>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+        {timerIds.map((id, index) => <TimerInstance key={id} {...props} timerNumber={index + 1} onRemove={() => removeTimer(id)} canRemove={timerIds.length > 1} />)}
+      </div>
+    </section>
+  );
+}
+
+function TimerInstance({ subjects, topics, onSaved, timerNumber, onRemove, canRemove }: Props & { timerNumber: number; onRemove: () => void; canRemove: boolean }) {
   const { user } = useAuth();
   const [mode, setMode] = useState<Mode>('stopwatch');
   const [minutes, setMinutes] = useState(60);
@@ -30,24 +52,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState<{ x: number; y: number } | null>(null);
-  const dragRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-
   const targetMs = Math.max(1, minutes) * 60_000;
-  const beginDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if ((event.target as HTMLElement).closest('button')) return;
-    const rect = event.currentTarget.parentElement!.getBoundingClientRect();
-    dragRef.current = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  };
-  const moveDrag = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current) return;
-    const left = Math.max(8, Math.min(window.innerWidth - 120, dragRef.current.left + event.clientX - dragRef.current.x));
-    const top = Math.max(8, Math.min(window.innerHeight - 64, dragRef.current.top + event.clientY - dragRef.current.y));
-    setPosition({ x: left, y: top });
-  };
-  const endDrag = () => { dragRef.current = null; };
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
   const subjectTopics = useMemo(() => topics.filter((topic) => topic.subject_id === subjectId), [topics, subjectId]);
@@ -119,15 +124,13 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
 
   const disabledSettings = running || elapsedMs > 0 || finished;
 
-  if (!open) return <button type="button" onClick={() => { setOpen(true); setMinimized(false); }} className="btn btn-primary mb-5"><TimerIcon size={17} /> Open study timer</button>;
-
   return (
-    <section className="fixed z-[80] w-[min(420px,calc(100vw-24px))] max-h-[calc(100vh-24px)] overflow-y-auto card shadow-2xl p-4" style={position ? { left: position.x, top: position.y } : { right: 20, bottom: 20 }}>
-      <div className="flex items-center justify-between gap-2 mb-3 cursor-move select-none touch-none" onPointerDown={beginDrag} onPointerMove={moveDrag} onPointerUp={endDrag} onPointerCancel={endDrag}>
-        <div className="flex items-center gap-2 text-sm font-semibold text-primary"><Move size={15} /> Study timer <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
+    <section className="card p-3 min-w-0">
+      <div className="flex items-center justify-between gap-2 mb-3 select-none">
+        <div className="flex items-center gap-2 text-sm font-semibold text-primary"> <TimerIcon size={15} /> Timer {timerNumber} <span className="font-mono text-brand-500">{formatClock(shownMs)}</span></div>
         <div className="flex items-center gap-1">
           <button type="button" className="btn-ghost btn !p-1.5" title={minimized ? "Expand" : "Minimise"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={16} /> : <Minus size={16} />}</button>
-          <button type="button" className="btn-ghost btn !p-1.5" title="Close timer panel" onClick={() => setOpen(false)}><X size={16} /></button>
+          {canRemove && !running && elapsedMs === 0 && <button type="button" className="btn-ghost btn !p-1.5 text-red-500" title="Remove empty timer" onClick={onRemove}><Trash2 size={15} /></button>}
         </div>
       </div>
       {!minimized && <>
@@ -135,7 +138,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
         <div>
           <div className="flex items-center gap-2">
             <TimerIcon size={19} className="text-brand-500" />
-            <h2 className="font-semibold text-primary text-lg">Study timer</h2>
+            <h2 className="font-semibold text-primary text-lg">Timer {timerNumber}</h2>
           </div>
           <p className="text-sm text-secondary mt-1">Only time recorded here contributes to your study totals.</p>
         </div>
