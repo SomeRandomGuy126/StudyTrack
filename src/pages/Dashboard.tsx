@@ -17,11 +17,12 @@ export function Dashboard({ onNavigate }: Props) {
   const { profile } = useAuth();
   const data = useUserData();
 
+  const timerSessions = data.studySessions.filter((session) => session.tracking_method === 'timer');
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
   const stats = useMemo(() => {
-    const todayStudy = data.studySessions.filter((s) => isToday(s.studied_date));
+    const todayStudy = timerSessions.filter((s) => isToday(s.studied_date));
     const overdueRevisions = data.revisions.filter((r) => r.status === 'due' && isOverdue(r.next_due_date));
     const dueTodayRevisions = data.revisions.filter((r) => r.status === 'due' && isToday(r.next_due_date));
     const dueThisWeek = data.revisions.filter((r) => r.status === 'due' && isThisWeek(r.next_due_date));
@@ -29,8 +30,8 @@ export function Dashboard({ onNavigate }: Props) {
     const upcomingDeadlines = data.tasks
       .filter((t) => t.status !== 'completed' && t.deadline && daysUntil(t.deadline) >= 0 && daysUntil(t.deadline) <= 7)
       .sort((a, b) => new Date(a.deadline!).getTime() - new Date(b.deadline!).getTime());
-    const recentStudy = data.studySessions.slice(0, 5);
-    const weekStudyMinutes = data.studySessions
+    const recentStudy = timerSessions.slice(0, 5);
+    const weekStudyMinutes = timerSessions
       .filter((s) => isThisWeek(s.studied_date))
       .reduce((sum, s) => sum + s.duration_minutes, 0);
 
@@ -43,7 +44,7 @@ export function Dashboard({ onNavigate }: Props) {
       upcomingDeadlines,
       recentStudy,
       weekStudyMinutes,
-      totalStudyMinutes: data.studySessions.reduce((sum, s) => sum + s.duration_minutes, 0),
+      totalStudyMinutes: timerSessions.reduce((sum, s) => sum + s.duration_minutes, 0),
       totalRevisions: data.revisions.filter((r) => r.status === 'completed').length,
     };
   }, [data]);
@@ -51,7 +52,7 @@ export function Dashboard({ onNavigate }: Props) {
   const subjectProgress = useMemo(() => {
     return data.subjects.map((subject) => {
       const subjectTopics = data.topics.filter((t) => t.subject_id === subject.id);
-      const subjectSessions = data.studySessions.filter((s) => s.subject_id === subject.id);
+      const subjectSessions = timerSessions.filter((s) => s.subject_id === subject.id);
       const subjectRevisions = data.revisions.filter((r) => r.subject_id === subject.id);
       const completedRevisions = subjectRevisions.filter((r) => r.status === 'completed').length;
       const avgConfidence = subjectSessions.length > 0
@@ -65,7 +66,7 @@ export function Dashboard({ onNavigate }: Props) {
         avgConfidence,
       };
     });
-  }, [data.subjects, data.topics, data.studySessions, data.revisions]);
+  }, [data.subjects, data.topics, timerSessions, data.revisions]);
 
   if (data.loading) {
     return (
@@ -90,7 +91,7 @@ export function Dashboard({ onNavigate }: Props) {
         </div>
         <div className="flex gap-2">
           <button onClick={() => onNavigate('study')} className="btn btn-secondary">
-            <Plus size={16} /> Log study
+            <Plus size={16} /> Start timer
           </button>
           <button onClick={() => onNavigate('tasks')} className="btn btn-primary">
             <Plus size={16} /> Add task
@@ -182,7 +183,7 @@ export function Dashboard({ onNavigate }: Props) {
             </div>
             <div className="space-y-2">
               {stats.dueTodayRevisions.length === 0 && stats.todayStudy.length === 0 ? (
-                <p className="text-secondary text-sm text-center py-6">Nothing scheduled for today. Great time to log a study session!</p>
+                <p className="text-secondary text-sm text-center py-6">Nothing scheduled for today. Start a study timer whenever you're ready.</p>
               ) : (
                 <>
                   {stats.dueTodayRevisions.map((r) => (
@@ -248,7 +249,7 @@ export function Dashboard({ onNavigate }: Props) {
             </div>
             <div className="space-y-2">
               {stats.recentStudy.length === 0 ? (
-                <p className="text-secondary text-sm text-center py-6">No study sessions logged yet.</p>
+                <p className="text-secondary text-sm text-center py-6">No timer sessions recorded yet.</p>
               ) : (
                 stats.recentStudy.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg surface-tertiary">
