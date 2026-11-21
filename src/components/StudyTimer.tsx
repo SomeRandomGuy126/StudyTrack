@@ -24,13 +24,14 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
   const [title, setTitle] = useState('');
   const [confidence, setConfidence] = useState(3);
   const [elapsedMs, setElapsedMs] = useState(0);
+  const [now, setNow] = useState(Date.now());
   const [startedAt, setStartedAt] = useState<number | null>(null);
   const [running, setRunning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [finished, setFinished] = useState(false);
 
   const targetMs = Math.max(1, minutes) * 60_000;
-  const actualMs = elapsedMs + (running && startedAt !== null ? Date.now() - startedAt : 0);
+  const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
   const subjectTopics = useMemo(() => topics.filter((topic) => topic.subject_id === subjectId), [topics, subjectId]);
 
@@ -38,7 +39,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
     if (!running || startedAt === null) return;
     const tick = () => {
       const current = elapsedMs + Date.now() - startedAt;
-      setElapsedMs(current);
+      setNow(Date.now());
       if (mode === 'countdown' && current >= targetMs) {
         setRunning(false);
         setStartedAt(null);
@@ -53,6 +54,7 @@ export function StudyTimer({ subjects, topics, onSaved }: Props) {
   const start = () => {
     if (!subjectId) return;
     setStartedAt(Date.now());
+    setNow(Date.now());
     setRunning(true);
     setFinished(false);
   };
