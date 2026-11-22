@@ -122,7 +122,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     if (duration < 1) return;
     setSaving(true);
     const selectedTopic = topics.find((topic) => topic.id === topicId);
-    const { error } = await supabase.from('study_sessions').insert({
+    const sessionPayload = {
       user_id: user.id,
       subject_id: subjectId,
       topic_id: topicId || null,
@@ -133,9 +133,27 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       duration_minutes: duration,
       confidence,
       tracking_method: 'timer',
-    });
+    };
+
+    let { error } = await supabase.from('study_sessions').insert(sessionPayload);
+
+    // Older databases may not have the optional tracking_method column yet.
+    // Retry without it so a schema migration gap cannot block saving study time.
+    if (
+      error &&
+      (error.code === '42703' || error.code === 'PGRST204') &&
+      error.message.toLowerCase().includes('tracking_method')
+    ) {
+      const legacyPayload = Object.fromEntries(
+        Object.entries(sessionPayload).filter(([key]) => key !== 'tracking_method')
+      );
+      const retry = await supabase.from('study_sessions').insert(legacyPayload);
+      error = retry.error;
+    }
+
     setSaving(false);
     if (error) {
+      console.error('Failed to save study session:', error);
       window.alert('Could not save this study session. Please try again.');
       return;
     }
