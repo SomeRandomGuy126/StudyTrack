@@ -1,6 +1,13 @@
 // Spaced repetition engine for StudyTrack
 // Calculates next revision due date based on revision number, confidence, recall rating, and difficulty.
 
+export function toLocalDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 const BASE_INTERVALS = [2, 7, 14, 30, 60, 90, 120];
 
 export function calculateNextInterval(
