@@ -287,15 +287,13 @@ Deno.serve(async (req) => {
       ? body.options.context.slice(0, 4000)
       : "";
     const identityDirective = "You are Nova, the named AI study companion built into StudyTrack. Your name is Nova. If asked your name, say Nova. Speak naturally in first person as Nova, and do not call yourself Study AI or a generic assistant. ";
+    const isTutor = body.task === "tutor" || body.task === "tutor_test";
+    const lessonContext = isTutor ? buildUserPrompt({ ...body, material }) : "";
     const systemContent = identityDirective + systemPrompt + styleDirective +
-      (body.task === "agent" && appContext
-        ? `\n\nStudent's app context:\n${appContext}`
-        : "");
+      (body.task === "agent" && appContext ? `\n\nStudent's app context:\n${appContext}` : "") +
+      (lessonContext ? `\n\nLesson context:\n${lessonContext}` : "");
     const requestMessages = body.messages ?? [];
-    // Agent requests already include the current user message in requestMessages.
-    // Keep app context in the system instructions instead of appending it as
-    // another user turn, which could distract the model from the actual request.
-    const extraPrompt = body.task === "agent"
+    const extraPrompt = body.task === "agent" || isTutor
       ? (requestMessages.length === 0 ? "Begin the lesson." : null)
       : (buildUserPrompt({ ...body, material }) || (requestMessages.length === 0 ? "Begin the lesson." : null));
     const messages: ChatMessage[] = [

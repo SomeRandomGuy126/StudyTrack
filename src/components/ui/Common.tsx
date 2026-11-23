@@ -46,7 +46,7 @@ type ProgressBarProps = {
   color?: string;
   className?: string;
 };
-export function ProgressBar({ value, max = 100, color = '#3b82f6', className = '' }: ProgressBarProps) {
+export function ProgressBar({ value, max = 100, color = 'var(--accent)', className = '' }: ProgressBarProps) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   return (
     <div className={`h-2 rounded-full overflow-hidden surface-tertiary ${className}`}>

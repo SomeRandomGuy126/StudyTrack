@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner, Badge, ProgressBar } from '@/components/ui/Common';
-import { TASK_STATUSES, PRIORITY_LEVELS, relativeDate, daysUntil } from '@/lib/spacedRepetition';
+import { TASK_STATUSES, PRIORITY_LEVELS, relativeDate, daysUntil, toLocalDateString } from '@/lib/spacedRepetition';
 import type { Task, Subtask } from '@/lib/supabase';
 import {
   CheckSquare, Plus, List, Columns3, Calendar as CalIcon, Table as TableIcon,
@@ -417,7 +417,7 @@ function TaskCalendarView({ tasks, onEdit }: { tasks: Task[]; onEdit: (t: Task) 
       <div className="grid grid-cols-7 gap-1">
         {days.map((day, i) => {
           if (!day) return <div key={i} />;
-          const dateStr = day.toISOString().split('T')[0];
+          const dateStr = toLocalDateString(day);
           const dayTasks = tasksByDate[dateStr] ?? [];
           const isToday = new Date().toDateString() === day.toDateString();
           return (
@@ -483,16 +483,13 @@ function TaskModal({ task, subjects, projects, userId, onClose, onSaved }: {
       taskId = newTask?.id;
     }
 
-    if (taskId && subtasks.length > 0) {
-      // Delete old subtasks and recreate
+    if (taskId) {
       if (task) await supabase.from('subtasks').delete().eq('task_id', taskId);
-      const subtaskRows = subtasks.map((s, i) => ({
-        task_id: taskId,
-        title: s.title,
-        completed: s.completed,
-        position: i,
-      }));
-      if (subtaskRows.length > 0) await supabase.from('subtasks').insert(subtaskRows);
+      if (subtasks.length > 0) {
+        await supabase.from('subtasks').insert(
+          subtasks.map((s, i) => ({ task_id: taskId, title: s.title, completed: s.completed, position: i }))
+        );
+      }
     }
 
     setSaving(false);

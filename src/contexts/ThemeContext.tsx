@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 export const ACCENTS = [
-  { id: 'blue', label: 'Classic blue', hint: 'Clean and familiar', color: '#3b82f6', hover: '#2563eb', secondary: '#1e40af' },
+  { id: 'ink', label: 'Pen ink', hint: 'Blue exercise-book ink', color: '#2740d6', hover: '#1d31b0', secondary: '#14213d' },
   { id: 'green', label: 'Fresh green', hint: 'Calm and focused', color: '#22c55e', hover: '#16a34a', secondary: '#166534' },
   { id: 'violet', label: 'Violet', hint: 'Soft and creative', color: '#8b5cf6', hover: '#7c3aed', secondary: '#5b21b6' },
   { id: 'amber', label: 'Amber', hint: 'Warm and bright', color: '#f59e0b', hover: '#d97706', secondary: '#92400e' },
@@ -93,7 +93,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   );
   const [systemTheme, setSystemTheme] = useState<Theme>(() => getSystemTheme());
   const [accent, setAccentState] = useState<AccentId>(() =>
-    readStoredValue('studytrack-accent', ACCENTS.map((item) => item.id), 'blue')
+    readStoredValue('studytrack-accent', ACCENTS.map((item) => item.id), 'ink')
   );
   const [interfaceSize, setInterfaceSizeState] = useState<InterfaceSize>(() =>
     readStoredValue('studytrack-interface-size', ['compact', 'comfortable', 'large'] as const, 'comfortable')

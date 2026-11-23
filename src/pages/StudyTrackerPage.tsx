@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { StudyTimer } from '@/components/StudyTimer';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
-import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate } from '@/lib/spacedRepetition';
+import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate, toLocalDateString } from '@/lib/spacedRepetition';
 import type { StudySession } from '@/lib/supabase';
 import {
   Clock, List, Table as TableIcon, Calendar as CalIcon, BookOpen,
@@ -283,7 +283,7 @@ function CalendarView({ sessions, onEdit }: {
       <div className="grid grid-cols-7 gap-1">
         {days.map((day, i) => {
           if (!day) return <div key={i} />;
-          const dateStr = day.toISOString().split('T')[0];
+          const dateStr = toLocalDateString(day);
           const daySessions = sessionsByDate[dateStr] ?? [];
           const isToday = new Date().toDateString() === day.toDateString();
           return (
@@ -387,7 +387,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
   const [title, setTitle] = useState(session?.title ?? savedDraft.title ?? '');
   const [description, setDescription] = useState(session?.description ?? savedDraft.description ?? '');
   const [personalNotes, setPersonalNotes] = useState(session?.personal_notes ?? savedDraft.personalNotes ?? '');
-  const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? savedDraft.studiedDate ?? new Date().toISOString().split('T')[0]);
+  const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? savedDraft.studiedDate ?? toLocalDateString(new Date()));
   const [duration, setDuration] = useState(session?.duration_minutes ?? savedDraft.duration ?? 60);
   const [confidence, setConfidence] = useState(session?.confidence ?? savedDraft.confidence ?? 3);
   const [saving, setSaving] = useState(false);
