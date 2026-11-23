@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/Common';
-import { EVENT_TYPES, formatShortDate } from '@/lib/spacedRepetition';
+import { EVENT_TYPES, formatShortDate, toLocalDateString } from '@/lib/spacedRepetition';
 import type { CalendarEvent } from '@/lib/supabase';
 import {
   Calendar as CalIcon, Plus, ChevronLeft, ChevronRight, Clock,
@@ -281,7 +281,7 @@ function MonthView({ currentDate, eventsForDate, onEventClick, onDateClick }: {
           return (
             <div
               key={i}
-              onClick={() => onDateClick(day.toISOString().split('T')[0])}
+              onClick={() => onDateClick(toLocalDateString(day))}
               className={`min-h-[90px] p-1.5 rounded-lg surface-tertiary cursor-pointer hover:opacity-80 transition-opacity ${isToday ? 'ring-1 ring-brand-500' : ''}`}
             >
               <p className={`text-xs ${isToday ? 'text-brand-600 font-bold' : 'text-secondary'}`}>{day.getDate()}</p>
@@ -433,7 +433,7 @@ function EventModal({ event, subjects, userId, defaultDate, onClose, onSaved, on
   const [description, setDescription] = useState(event?.description ?? savedDraft.description ?? '');
   const [eventType, setEventType] = useState<CalendarEvent['event_type']>(event?.event_type ?? savedDraft.eventType ?? 'personal');
   const [startDate, setStartDate] = useState(
-    event ? event.start_date.slice(0, 10) : (savedDraft.startDate ?? defaultDate ?? new Date().toISOString().split('T')[0])
+    event ? event.start_date.slice(0, 10) : (savedDraft.startDate ?? defaultDate ?? toLocalDateString(new Date()))
   );
   const [startTime, setStartTime] = useState(event ? new Date(event.start_date).toTimeString().slice(0, 5) : (savedDraft.startTime ?? '09:00'));
   const [endDate, setEndDate] = useState(
