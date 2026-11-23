@@ -11,7 +11,7 @@ import {
 export function AnalyticsPage() {
   const data = useUserData();
   const { profile } = useAuth();
-  const timerSessions = data.studySessions.filter((session) => session.tracking_method === 'timer');
+  const timerSessions = useMemo(() => data.studySessions.filter((session) => session.tracking_method === 'timer'), [data.studySessions]);
 
   const stats = useMemo(() => {
     const totalMinutes = timerSessions.reduce((sum, s) => sum + s.duration_minutes, 0);
@@ -83,7 +83,7 @@ export function AnalyticsPage() {
       last7Days, subjectStats, confidenceDist, recentRevisions, monthlyData,
       totalSessions: timerSessions.length,
     };
-  }, [data]);
+  }, [timerSessions, data.revisions, data.subjects, data.topics]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
