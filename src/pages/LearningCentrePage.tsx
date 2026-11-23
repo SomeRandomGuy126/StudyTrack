@@ -790,7 +790,7 @@ function TutorWorkspace({ data, onClose }: { data: DataProp; onClose: () => void
 
   const persistMessage = async (role: 'tutor' | 'student', content: string) => {
     if (!user) return;
-    await supabase.from('tutor_messages').insert({ user_id: user, session_id: sessionId, role, content });
+    await supabase.from('tutor_messages').insert({ user_id: user.id, session_id: sessionId, role, content });
   };
 
   const startLesson = async () => {
@@ -954,12 +954,13 @@ function YoutubeModal({ data, onClose }: { data: DataProp; onClose: () => void }
 
   const saveAsNote = async () => {
     if (!user || !result) return;
-    await supabase.from('notes').insert({
-      user_id: user,
+    const { error } = await supabase.from('notes').insert({
+      user_id: user.id,
       title: result.summary.slice(0, 60) || 'YouTube summary',
       content: `${videoUrl}\n\n${result.summary}\n\nKey points:\n${result.key_points.map((p) => `- ${p}`).join('\n')}\n\nKey terms:\n${result.key_terms.map((t) => `- ${t.term}: ${t.definition}`).join('\n')}\n\n${result.notes}`,
       subject_id: subjectId || null, topic_id: topicId || null, color: '#ef4444',
     });
+    if (error) { setError(error.message); return; }
     await logAiContent(user.id, 'summary', 'YouTube summary', result, subjectId, topicId, 'youtube', videoUrl);
     setSavedNotes(true); data.refresh();
   };
