@@ -17,7 +17,7 @@ export function Dashboard({ onNavigate }: Props) {
   const { profile } = useAuth();
   const data = useUserData();
 
-  const timerSessions = data.studySessions.filter((session) => session.tracking_method === 'timer');
+  const timerSessions = useMemo(() => data.studySessions.filter((session) => session.tracking_method === 'timer'), [data.studySessions]);
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -47,7 +47,7 @@ export function Dashboard({ onNavigate }: Props) {
       totalStudyMinutes: timerSessions.reduce((sum, s) => sum + s.duration_minutes, 0),
       totalRevisions: data.revisions.filter((r) => r.status === 'completed').length,
     };
-  }, [data]);
+  }, [timerSessions, data.revisions, data.tasks]);
 
   const subjectProgress = useMemo(() => {
     return data.subjects.map((subject) => {
