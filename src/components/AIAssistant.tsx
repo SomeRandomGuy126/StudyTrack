@@ -220,7 +220,7 @@ export function AIAssistant({ open, onClose }: Props) {
             break;
           }
         }
-        response = results.join('\\n\\n');
+        response = results.join('\n\n');
         if (allSucceeded && results.length === nestedSubtopicBatchRequest.length) {
           action = results.join(' ');
         }
