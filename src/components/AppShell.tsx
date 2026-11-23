@@ -195,14 +195,14 @@ export function AppShell() {
     <div className="min-h-screen flex" style={{ backgroundColor: 'var(--bg-primary)' }}>
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-64 flex-col surface border-r border-app shrink-0">
-        <SidebarContent />
+        {SidebarContent()}
       </aside>
 
       {/* Mobile sidebar */}
       {sidebarOpen && (
         <div className="lg:hidden fixed inset-0 z-40 flex">
           <div className="absolute inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
-          <aside className="relative w-64 flex flex-col surface border-r border-app animate-slide-in-right">
+          <aside className="relative w-64 flex flex-col surface border-r border-app animate-slide-in-left">
             <button
               onClick={() => setSidebarOpen(false)}
               className="absolute top-4 right-4 btn-ghost btn !p-1.5 z-10"
