@@ -11,7 +11,7 @@ import {
 } from '@/lib/spacedRepetition';
 import { Spinner } from '@/components/ui/Common';
 
-type Props = { onNavigate: (page: any) => void };
+type Props = { onNavigate: (page: any, view?: string) => void };
 
 export function Dashboard({ onNavigate }: Props) {
   const { profile } = useAuth();
@@ -116,6 +116,7 @@ export function Dashboard({ onNavigate }: Props) {
           value={String(stats.dueTodayRevisions.length)}
           sub="revisions"
           color="#8b5cf6"
+          onClick={() => onNavigate('revision', 'due')}
         />
         <StatCard
           icon={<AlertTriangle size={20} />}
@@ -124,6 +125,7 @@ export function Dashboard({ onNavigate }: Props) {
           sub="topics to revise"
           color="#ef4444"
           alert={stats.overdueRevisions.length > 0}
+          onClick={() => onNavigate('revision', 'overdue')}
         />
         <StatCard
           icon={<CheckSquare size={20} />}
@@ -131,6 +133,7 @@ export function Dashboard({ onNavigate }: Props) {
           value={String(stats.tasksDueToday.length)}
           sub="tasks"
           color="#f97316"
+          onClick={() => onNavigate('tasks', 'dueToday')}
         />
       </div>
 
@@ -150,7 +153,7 @@ export function Dashboard({ onNavigate }: Props) {
                   <div
                     key={r.id}
                     className="flex items-center justify-between p-3 rounded-lg surface-tertiary hover:border-red-500/40 transition-colors cursor-pointer"
-                    onClick={() => onNavigate('revision')}
+                    onClick={() => onNavigate('revision', 'overdue')}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       <div className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
@@ -164,7 +167,7 @@ export function Dashboard({ onNavigate }: Props) {
                 ))}
               </div>
               <button
-                onClick={() => onNavigate('revision')}
+                onClick={() => onNavigate('revision', 'overdue')}
                 className="btn btn-ghost text-red-600 !px-0 mt-3 text-sm"
               >
                 View all <ArrowRight size={14} />
@@ -189,7 +192,7 @@ export function Dashboard({ onNavigate }: Props) {
               ) : (
                 <>
                   {stats.dueTodayRevisions.map((r) => (
-                    <div key={r.id} className="flex items-center gap-3 p-3 rounded-lg surface-tertiary">
+                    <button type="button" key={r.id} onClick={() => onNavigate('revision', 'due')} className="w-full text-left flex items-center gap-3 p-3 rounded-lg surface-tertiary hover:opacity-80 transition-opacity">
                       <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ backgroundColor: `${r.subject?.color}20`, color: r.subject?.color }}>
                         <RefreshCw size={16} />
                       </div>
@@ -198,7 +201,7 @@ export function Dashboard({ onNavigate }: Props) {
                         <p className="text-xs text-tertiary">{r.subject?.name}</p>
                       </div>
                       <span className="badge bg-violet-500/10 text-violet-600">Revision</span>
-                    </div>
+                    </button>
                   ))}
                   {stats.todayStudy.map((s) => (
                     <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg surface-tertiary">
@@ -356,15 +359,18 @@ export function Dashboard({ onNavigate }: Props) {
           </div>
         </div>
       </div>
-    </div>
   );
+  return onClick ? (
+    <button type="button" onClick={onClick} className={`card p-4 text-left w-full hover:border-brand-500/50 hover:shadow-md transition-all cursor-pointer ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`} aria-label={`${label} ${sub}: ${value}. Open details`}>
+      {content}
+    </button>
+  ) : <div className={`card p-4 ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`}>{content}</div>;
 }
 
 function StatCard({
-  icon, label, value, sub, color, alert,
-}: { icon: React.ReactNode; label: string; value: string; sub: string; color: string; alert?: boolean }) {
-  return (
-    <div className={`card p-4 ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`}>
+  icon, label, value, sub, color, alert, onClick,
+}: { icon: React.ReactNode; label: string; value: string; sub: string; color: string; alert?: boolean; onClick?: () => void }) {
+  const content = (
       <div className="flex items-center gap-3">
         <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20`, color }}>
           {icon}
