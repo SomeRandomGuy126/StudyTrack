@@ -191,10 +191,7 @@ export function CalendarPage() {
 
         {/* Day view */}
         {view === 'day' && (
-          <DayView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={(e) => {
-            const event = data.events.find((ev) => ev.id === e.id);
-            if (event) { setEditing(event); setShowModal(true); }
-          }} />
+          <DayView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={handleCalendarEventClick} />
         )}
       </div>
 
