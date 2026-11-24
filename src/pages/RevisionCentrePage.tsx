@@ -16,10 +16,10 @@ import {
 
 type Tab = 'due' | 'overdue' | 'week' | 'upcoming' | 'completed';
 
-export function RevisionCentrePage() {
+export function RevisionCentrePage({ initialTab = 'overdue' }: { initialTab?: 'due' | 'overdue' }) {
   const data = useUserData();
   const { user } = useAuth();
-  const [tab, setTab] = useState<Tab>('overdue');
+  const [tab, setTab] = useState<Tab>(initialTab);
   const [completeTarget, setCompleteTarget] = useState<Revision | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Revision | null>(null);
 
