@@ -360,11 +360,6 @@ export function Dashboard({ onNavigate }: Props) {
         </div>
       </div>
   );
-  return onClick ? (
-    <button type="button" onClick={onClick} className={`card p-4 text-left w-full hover:border-brand-500/50 hover:shadow-md transition-all cursor-pointer ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`} aria-label={`${label} ${sub}: ${value}. Open details`}>
-      {content}
-    </button>
-  ) : <div className={`card p-4 ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`}>{content}</div>;
 }
 
 function StatCard({
