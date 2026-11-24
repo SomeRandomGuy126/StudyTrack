@@ -371,15 +371,27 @@ function StatCard({
   icon, label, value, sub, color, alert, onClick,
 }: { icon: React.ReactNode; label: string; value: string; sub: string; color: string; alert?: boolean; onClick?: () => void }) {
   const content = (
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20`, color }}>
-          {icon}
-        </div>
-        <div className="min-w-0">
-          <p className="text-2xl font-bold text-primary leading-none">{value}</p>
-          <p className="text-xs text-tertiary mt-1">{label} {sub}</p>
-        </div>
+    <div className="flex items-center gap-3">
+      <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${color}20`, color }}>
+        {icon}
+      </div>
+      <div className="min-w-0">
+        <p className="text-2xl font-bold text-primary leading-none">{value}</p>
+        <p className="text-xs text-tertiary mt-1">{label} {sub}</p>
       </div>
     </div>
+  );
+
+  return onClick ? (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`card p-4 text-left w-full hover:border-brand-500/50 hover:shadow-md transition-all cursor-pointer ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`}
+      aria-label={`${label} ${sub}: ${value}. Open details`}
+    >
+      {content}
+    </button>
+  ) : (
+    <div className={`card p-4 ${alert ? 'border-red-500/30 animate-pulse-soft' : ''}`}>{content}</div>
   );
 }
