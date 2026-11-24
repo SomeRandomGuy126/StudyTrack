@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -166,7 +166,13 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
   onSaved: () => void;
 }) {
   const [title, setTitle] = useState(note?.title ?? '');
-  const [content, setContent] = useState(note?.content ?? '');
+  const editorRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = safeNoteHtml(note?.content ?? '');
+    }
+  }, [note?.id]);
   const [subjectId, setSubjectId] = useState(note?.subject_id ?? '');
   const [topicId, setTopicId] = useState(note?.topic_id ?? '');
   const [saving, setSaving] = useState(false);
@@ -178,14 +184,13 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
     if (!editor) return;
     editor.focus();
     document.execCommand(command, false, value);
-    setContent(editor.innerHTML);
   };
 
   const handleSave = async () => {
     setSaving(true);
     const payload = {
       title,
-      content,
+      content: editorRef.current?.innerHTML ?? '',
       subject_id: subjectId || null,
       topic_id: topicId || null,
       updated_at: new Date().toISOString(),
@@ -234,10 +239,9 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
           </div>
           <div
             id="note-content-editor"
+            ref={editorRef}
             contentEditable
             suppressContentEditableWarning
-            onInput={(e) => setContent(e.currentTarget.innerHTML)}
-            dangerouslySetInnerHTML={{ __html: safeNoteHtml(content) }}
             className="input min-h-[240px] text-sm leading-6 overflow-y-auto"
             style={{ whiteSpace: 'normal' }}
           />
