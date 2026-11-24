@@ -9,9 +9,16 @@ import type { Note } from '@/lib/supabase';
 
 function safeNoteHtml(value: string) {
   if (!value) return '';
-  const source = /<\\/?(h[1-3]|p|div|ul|ol|li|strong|b|em|i|br)\\b/i.test(value)
-    ? value
-    : value.split('\\n').map((line) => line ? '<p>' + line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>' : '<br />').join('');
+  const looksLikeHtml = /<\/?(h[1-3]|p|div|ul|ol|li|strong|b|em|i|br)\b/i.test(value);
+  const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const source = looksLikeHtml ? value : escaped
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+    .replace(/^\*\*(.+?)\*\*$/gm, '<strong>$1</strong>')
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/((?:<li>.*?<\/li>\s*)+)/gs, '<ul>$1</ul>')
+    .replace(/\n/g, '<br />');
   const doc = new DOMParser().parseFromString('<div>' + source + '</div>', 'text/html');
   const allowed = new Set(['H1','H2','H3','P','DIV','UL','OL','LI','STRONG','B','EM','I','BR']);
   const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
