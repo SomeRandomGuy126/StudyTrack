@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner, Badge, ProgressBar } from '@/components/ui/Common';
-import { TASK_STATUSES, PRIORITY_LEVELS, relativeDate, daysUntil } from '@/lib/spacedRepetition';
+import { TASK_STATUSES, PRIORITY_LEVELS, relativeDate, daysUntil, isToday } from '@/lib/spacedRepetition';
 import type { Task, Subtask } from '@/lib/supabase';
 import {
   CheckSquare, Plus, List, Columns3, Calendar as CalIcon, Table as TableIcon,
@@ -13,7 +13,7 @@ import {
 
 type View = 'list' | 'kanban' | 'calendar' | 'table';
 
-export function TasksPage() {
+export function TasksPage({ initialFilter = 'all' }: { initialFilter?: 'all' | 'dueToday' }) {
   const data = useUserData();
   const { user } = useAuth();
   const [view, setView] = useState<View>('list');
@@ -23,18 +23,19 @@ export function TasksPage() {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
+  const [filterStatus, setFilterStatus] = useState(initialFilter === 'dueToday' ? 'todo' : 'all');
   const [filterPriority, setFilterPriority] = useState('all');
 
   const filtered = useMemo(() => {
     return data.tasks.filter((t) => {
+      if (initialFilter === 'dueToday' && (!t.deadline || !isToday(t.deadline) || t.status === 'completed')) return false;
       if (filterProject !== 'all' && t.project_id !== filterProject) return false;
       if (filterStatus !== 'all' && t.status !== filterStatus) return false;
       if (filterPriority !== 'all' && t.priority !== filterPriority) return false;
       if (search && !t.title.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [data.tasks, search, filterProject, filterStatus, filterPriority]);
+  }, [data.tasks, search, filterProject, filterStatus, filterPriority, initialFilter]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -66,8 +67,8 @@ export function TasksPage() {
     <div className="p-4 lg:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-primary">Tasks</h1>
-          <p className="text-secondary text-sm mt-1">Manage your assignments, projects and deadlines</p>
+          <h1 className="text-2xl font-bold text-primary">{initialFilter === 'dueToday' ? "Today's due tasks" : 'Tasks'}</h1>
+          <p className="text-secondary text-sm mt-1">{initialFilter === 'dueToday' ? 'Tasks with a deadline today that are not yet completed' : 'Manage your assignments, projects and deadlines'}</p>
         </div>
         <div className="flex gap-2">
           <button onClick={() => setShowProjectModal(true)} className="btn btn-secondary">
@@ -132,8 +133,8 @@ export function TasksPage() {
         <div className="card">
           <EmptyState
             icon={<CheckSquare size={48} />}
-            title="No tasks yet"
-            description="Create tasks to track your assignments, homework and projects."
+            title={initialFilter === 'dueToday' ? 'No tasks due today' : 'No tasks yet'}
+            description={initialFilter === 'dueToday' ? 'You have no outstanding tasks due today.' : 'Create tasks to track your assignments, homework and projects.'}
             action={<button onClick={() => setShowModal(true)} className="btn btn-primary"><Plus size={16} /> New task</button>}
           />
         </div>
