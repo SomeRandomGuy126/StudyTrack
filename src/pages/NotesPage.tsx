@@ -6,6 +6,25 @@ import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner } from '@/components/ui/Common';
 import { formatShortDate } from '@/lib/spacedRepetition';
 import type { Note } from '@/lib/supabase';
+
+function safeNoteHtml(value: string) {
+  if (!value) return '';
+  const source = /<\\/?(h[1-3]|p|div|ul|ol|li|strong|b|em|i|br)\\b/i.test(value)
+    ? value
+    : value.split('\\n').map((line) => line ? '<p>' + line.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</p>' : '<br />').join('');
+  const doc = new DOMParser().parseFromString('<div>' + source + '</div>', 'text/html');
+  const allowed = new Set(['H1','H2','H3','P','DIV','UL','OL','LI','STRONG','B','EM','I','BR']);
+  const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const clean = (node: Node): string => Array.from(node.childNodes).map((child) => {
+    if (child.nodeType === Node.TEXT_NODE) return escapeText(child.textContent ?? '');
+    if (child.nodeType !== Node.ELEMENT_NODE) return '';
+    const el = child as HTMLElement;
+    const inner = clean(el);
+    return allowed.has(el.tagName) ? '<' + el.tagName.toLowerCase() + '>' + inner + '</' + el.tagName.toLowerCase() + '>' : inner;
+  }).join('');
+  return clean(doc.body.firstElementChild ?? doc.body);
+}
+
 import {
   StickyNote, Plus, Edit2, Trash2, Search, Pin, BookOpen, Bold,
   List as ListIcon, Heading
@@ -93,7 +112,7 @@ export function NotesPage() {
                   <button onClick={() => setDeleteId(note.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <p className="text-sm text-secondary line-clamp-4 flex-1 whitespace-pre-wrap">{note.content || 'No content'}</p>
+              <div className="text-sm text-secondary line-clamp-4 flex-1 note-content-preview">{note.content ? <div dangerouslySetInnerHTML={{ __html: safeNoteHtml(note.content) }} /> : 'No content'}</div>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-app">
                 {note.subject ? (
                   <div className="flex items-center gap-1.5">
@@ -147,18 +166,12 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
 
   const subjectTopics = topics.filter((t) => t.subject_id === subjectId);
 
-  const insertFormatting = (prefix: string, suffix: string = prefix) => {
-    const textarea = document.getElementById('note-content') as HTMLTextAreaElement;
-    if (!textarea) return;
-    const start = textarea.selectionStart;
-    const end = textarea.selectionEnd;
-    const selected = content.substring(start, end);
-    const newContent = content.substring(0, start) + prefix + selected + suffix + content.substring(end);
-    setContent(newContent);
-    setTimeout(() => {
-      textarea.focus();
-      textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-    }, 0);
+  const applyFormatting = (command: string, value?: string) => {
+    const editor = document.getElementById('note-content-editor');
+    if (!editor) return;
+    editor.focus();
+    document.execCommand(command, false, value);
+    setContent(editor.innerHTML);
   };
 
   const handleSave = async () => {
@@ -205,18 +218,21 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label className="text-sm font-medium text-secondary">Content</label>
-            <div className="flex gap-1">
-              <button onClick={() => insertFormatting('# ', '')} className="btn-ghost btn !p-1.5" title="Heading"><Heading size={14} /></button>
-              <button onClick={() => insertFormatting('**')} className="btn-ghost btn !p-1.5" title="Bold"><Bold size={14} /></button>
-              <button onClick={() => insertFormatting('- ', '')} className="btn-ghost btn !p-1.5" title="List"><ListIcon size={14} /></button>
+            <div className="flex items-center gap-1">
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('formatBlock', 'H2')} className="btn-ghost btn !p-1.5" title="Heading"><Heading size={14} /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('bold')} className="btn-ghost btn !p-1.5" title="Bold"><Bold size={14} /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('insertUnorderedList')} className="btn-ghost btn !p-1.5" title="Bullet points"><ListIcon size={14} /></button>
+              <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('insertOrderedList')} className="btn-ghost btn !p-1.5 text-xs font-semibold" title="Numbered list">1.</button>
             </div>
           </div>
-          <textarea
-            id="note-content"
-            className="input min-h-[240px] font-mono text-sm"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Write your note here... Use # for headings, ** for bold, - for bullet points"
+          <div
+            id="note-content-editor"
+            contentEditable
+            suppressContentEditableWarning
+            onInput={(e) => setContent(e.currentTarget.innerHTML)}
+            dangerouslySetInnerHTML={{ __html: safeNoteHtml(content) }}
+            className="input min-h-[240px] text-sm leading-6 overflow-y-auto"
+            style={{ whiteSpace: 'normal' }}
           />
         </div>
         <div className="flex gap-3 justify-end pt-2">
