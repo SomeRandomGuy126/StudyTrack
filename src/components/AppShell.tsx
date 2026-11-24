@@ -48,6 +48,14 @@ export function AppShell() {
   const { profile, user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [page, setPage] = useState<Page>('dashboard');
+  const [revisionInitialTab, setRevisionInitialTab] = useState<'due' | 'overdue'>('overdue');
+  const [tasksInitialFilter, setTasksInitialFilter] = useState<'all' | 'dueToday'>('all');
+
+  const navigateFromDashboard = (nextPage: Page, view?: string) => {
+    if (nextPage === 'revision' && (view === 'due' || view === 'overdue')) setRevisionInitialTab(view);
+    if (nextPage === 'tasks') setTasksInitialFilter(view === 'dueToday' ? 'dueToday' : 'all');
+    setPage(nextPage);
+  };
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [aiOpen, setAiOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -130,12 +138,12 @@ export function AppShell() {
 
   const renderPage = () => {
     switch (page) {
-      case 'dashboard': return <Dashboard onNavigate={setPage} />;
+      case 'dashboard': return <Dashboard onNavigate={navigateFromDashboard} />;
       case 'learning': return <LearningCentrePage />;
       case 'subjects': return <SubjectsPage />;
       case 'study': return <StudyTrackerPage />;
-      case 'revision': return <RevisionCentrePage />;
-      case 'tasks': return <TasksPage />;
+      case 'revision': return <RevisionCentrePage initialTab={revisionInitialTab} />;
+      case 'tasks': return <TasksPage initialFilter={tasksInitialFilter} />;
       case 'calendar': return <CalendarPage />;
       case 'notes': return <NotesPage />;
       case 'flashcards': return <FlashcardsPage />;
