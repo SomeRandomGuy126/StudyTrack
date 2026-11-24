@@ -23,7 +23,7 @@ export function TasksPage({ initialFilter = 'all' }: { initialFilter?: 'all' | '
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [search, setSearch] = useState('');
   const [filterProject, setFilterProject] = useState('all');
-  const [filterStatus, setFilterStatus] = useState(initialFilter === 'dueToday' ? 'todo' : 'all');
+  const [filterStatus, setFilterStatus] = useState('all');
   const [filterPriority, setFilterPriority] = useState('all');
 
   const filtered = useMemo(() => {
