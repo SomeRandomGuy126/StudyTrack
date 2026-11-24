@@ -22,6 +22,9 @@ export function CalendarPage() {
   const [editing, setEditing] = useState<CalendarEvent | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [showDayModal, setShowDayModal] = useState(false);
+  const [activeFilter, setActiveFilter] = useState('all');
+  const [selectedGeneratedEvent, setSelectedGeneratedEvent] = useState<any | null>(null);
 
   // Merge study sessions, revisions, and tasks into calendar events
   const allEvents = useMemo(() => {
@@ -44,7 +47,7 @@ export function CalendarPage() {
         date: e.start_date,
         endDate: e.end_date,
         type: e.event_type,
-        color: e.subject?.color ?? typeInfo?.color ?? '#64748b',
+        color: typeInfo?.color ?? e.subject?.color ?? '#64748b',
         source: 'event',
         startTime: new Date(e.start_date).toTimeString().slice(0, 5),
       });
@@ -56,7 +59,7 @@ export function CalendarPage() {
         title: s.title,
         date: new Date(s.studied_date).toISOString(),
         type: 'study',
-        color: s.subject?.color ?? '#3b82f6',
+        color: '#3b82f6',
         source: 'study',
       });
     });
@@ -78,7 +81,7 @@ export function CalendarPage() {
         title: `Due: ${t.title}`,
         date: new Date(t.deadline ?? new Date()).toISOString(),
         type: 'homework',
-        color: t.subject?.color ?? '#f97316',
+        color: '#f97316',
         source: 'task',
       });
     });
@@ -122,9 +125,17 @@ export function CalendarPage() {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
   }
 
+  const filteredEvents = activeFilter === 'all' ? allEvents : allEvents.filter((e) => e.type === activeFilter);
   const eventsForDate = (date: Date) => {
     const dateStr = date.toDateString();
-    return allEvents.filter((e) => new Date(e.date).toDateString() === dateStr);
+    return filteredEvents.filter((e) => new Date(e.date).toDateString() === dateStr);
+  };
+  const handleCalendarEventClick = (item: any) => {
+    if (item.source === 'event') {
+      const event = data.events.find((ev) => ev.id === item.id);
+      if (event) { setEditing(event); setShowModal(true); return; }
+    }
+    setSelectedGeneratedEvent(item);
   };
 
   return (
@@ -158,29 +169,24 @@ export function CalendarPage() {
         </div>
 
         {/* Legend */}
-        <div className="flex items-center flex-wrap gap-3 mb-4 text-xs text-tertiary">
-          {EVENT_TYPES.map((t) => (
-            <div key={t.value} className="flex items-center gap-1.5">
-              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: t.color }} />
-              <span>{t.label}</span>
-            </div>
+        <div className="flex items-center flex-wrap gap-2 mb-4">
+          {[{ value: 'all', label: 'All', color: '#64748b' }, ...EVENT_TYPES].map((t) => (
+            <button key={t.value} type="button" onClick={() => setActiveFilter(t.value)} aria-pressed={activeFilter === t.value}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${activeFilter === t.value ? 'border-brand-500 bg-brand-500/10 text-brand-600' : 'border-app text-secondary hover:bg-app-hover'}`}>
+              {t.value !== 'all' && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: t.color }} />}
+              {t.label}
+            </button>
           ))}
         </div>
 
         {/* Month view */}
         {view === 'month' && (
-          <MonthView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={(e) => {
-            const event = data.events.find((ev) => ev.id === e.id);
-            if (event) { setEditing(event); setShowModal(true); }
-          }} onDateClick={(d) => { setSelectedDate(d); setEditing(null); setShowModal(true); }} />
+          <MonthView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={handleCalendarEventClick} onDateClick={(d) => { setCurrentDate(new Date(d + 'T12:00:00')); setSelectedDate(d); setShowDayModal(true); }} />
         )}
 
         {/* Week view */}
         {view === 'week' && (
-          <WeekView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={(e) => {
-            const event = data.events.find((ev) => ev.id === e.id);
-            if (event) { setEditing(event); setShowModal(true); }
-          }} />
+          <WeekView currentDate={currentDate} eventsForDate={eventsForDate} onEventClick={handleCalendarEventClick} />
         )}
 
         {/* Day view */}
@@ -224,6 +230,28 @@ export function CalendarPage() {
         </div>
       </div>
 
+      {showDayModal && selectedDate && (
+        <Modal open onClose={() => setShowDayModal(false)} title={new Date(selectedDate + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })} size="md">
+          <div className="space-y-3">
+            {eventsForDate(new Date(selectedDate + 'T12:00:00')).length ? eventsForDate(new Date(selectedDate + 'T12:00:00')).map((item) => (
+              <button key={item.id + item.source} onClick={() => { setShowDayModal(false); handleCalendarEventClick(item); }} className="w-full text-left rounded-lg p-3 flex items-start gap-3 hover:opacity-80" style={{ backgroundColor: item.color + '18' }}>
+                <span className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: item.color }} />
+                <span className="min-w-0"><span className="block text-sm font-medium text-primary">{item.title}</span><span className="block text-xs text-secondary capitalize mt-0.5">{item.type} · {item.startTime || 'All day'}</span></span>
+              </button>
+            )) : <p className="text-sm text-secondary py-4 text-center">Nothing scheduled for this day yet.</p>}
+            <button className="btn btn-primary w-full" onClick={() => { setShowDayModal(false); setEditing(null); setShowModal(true); }}><Plus size={16} /> Add to this day</button>
+          </div>
+        </Modal>
+      )}
+      {selectedGeneratedEvent && (
+        <Modal open onClose={() => setSelectedGeneratedEvent(null)} title={selectedGeneratedEvent.title} size="md">
+          <div className="space-y-3">
+            <p className="text-sm text-secondary capitalize">{selectedGeneratedEvent.type}</p>
+            <p className="text-sm text-primary">{new Date(selectedGeneratedEvent.date).toLocaleString('en-GB', { dateStyle: 'full', timeStyle: 'short' })}</p>
+            <p className="text-xs text-tertiary">This item comes from your {selectedGeneratedEvent.source === 'study' ? 'study sessions' : selectedGeneratedEvent.source === 'revision' ? 'revision schedule' : 'tasks'} and is managed in that section.</p>
+          </div>
+        </Modal>
+      )}
       {showModal && (
         <EventModal
           event={editing}
