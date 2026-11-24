@@ -173,6 +173,8 @@ export function AppShell() {
             key={item.id}
             onClick={() => {
               setPage(item.id);
+              if (item.id === 'tasks') setTasksInitialFilter('all');
+              if (item.id === 'revision') setRevisionInitialTab('overdue');
               setSidebarOpen(false);
             }}
             className={`nav-link w-full ${page === item.id ? 'active' : ''}`}
