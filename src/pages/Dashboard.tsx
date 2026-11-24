@@ -359,6 +359,7 @@ export function Dashboard({ onNavigate }: Props) {
           </div>
         </div>
       </div>
+    </div>
   );
 }
 
