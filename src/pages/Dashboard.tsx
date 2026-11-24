@@ -17,7 +17,9 @@ export function Dashboard({ onNavigate }: Props) {
   const { profile } = useAuth();
   const data = useUserData();
 
-  const timerSessions = data.studySessions.filter((session) => session.tracking_method === 'timer');
+  // Include every saved study session. Older database schemas may not store tracking_method,
+  // so filtering to 'timer' silently hides valid sessions from the dashboard.
+  const timerSessions = data.studySessions;
   const today = new Date();
   const todayStr = today.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
 
@@ -249,7 +251,7 @@ export function Dashboard({ onNavigate }: Props) {
             </div>
             <div className="space-y-2">
               {stats.recentStudy.length === 0 ? (
-                <p className="text-secondary text-sm text-center py-6">No timer sessions recorded yet.</p>
+                <p className="text-secondary text-sm text-center py-6">No study sessions recorded yet.</p>
               ) : (
                 stats.recentStudy.map((s) => (
                   <div key={s.id} className="flex items-center gap-3 p-3 rounded-lg surface-tertiary">
