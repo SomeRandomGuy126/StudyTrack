@@ -222,3 +222,15 @@
 /* Top bar: solid, with a hard bottom edge. No blur. */
 header.surface { border-width: 0 0 1px 0; }
 aside.surface { border-width: 0 1px 0 0; }
+
+/* Rich-text notes */
+.note-content-preview h1,.note-content-preview h2,.note-content-preview h3,#note-content-editor h1,#note-content-editor h2,#note-content-editor h3{font-weight:700;line-height:1.35;margin:.65rem 0 .35rem}
+.note-content-preview h1,#note-content-editor h1{font-size:1.2rem}
+.note-content-preview h2,#note-content-editor h2{font-size:1.1rem}
+.note-content-preview h3,#note-content-editor h3{font-size:1rem}
+.note-content-preview ul,.note-content-preview ol,#note-content-editor ul,#note-content-editor ol{padding-left:1.5rem;margin:.4rem 0}
+.note-content-preview ul,#note-content-editor ul{list-style:disc}
+.note-content-preview ol,#note-content-editor ol{list-style:decimal}
+.note-content-preview li,#note-content-editor li{margin:.15rem 0}
+#note-content-editor p{margin:.35rem 0}
+#note-content-editor:empty:before{content:'Write your note here...';color:var(--text-tertiary);pointer-events:none}
