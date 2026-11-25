@@ -14,6 +14,8 @@ import {
 
 type View = 'list' | 'table' | 'calendar' | 'subject';
 
+const getSessionType = (session: Pick<StudySession, 'session_type'>) => session.session_type || 'uncategorised';
+
 export function StudyTrackerPage() {
   const data = useUserData();
   const { user } = useAuth();
@@ -31,7 +33,7 @@ export function StudyTrackerPage() {
   const filtered = useMemo(() => {
     return data.studySessions.filter((s) => {
       if (filterSubject !== 'all' && s.subject_id !== filterSubject) return false;
-      if (filterType !== 'all' && s.session_type !== filterType) return false;
+      if (filterType !== 'all' && getSessionType(s) !== filterType) return false;
       if (filterMethod !== 'all' && s.tracking_method !== filterMethod) return false;
       if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !s.subject?.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
@@ -181,7 +183,7 @@ function ListView({ sessions, onEdit, onDelete, onConfidenceChange }: {
                   <span className="badge" style={{ backgroundColor: `${s.subject?.color}15`, color: s.subject?.color }}>
                     {formatDuration(s.duration_minutes)}
                   </span>
-                  <span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span>
+                  <span className={`badge ${getSessionType(s) === 'lesson' ? 'bg-sky-500/15 text-sky-400' : getSessionType(s) === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{getSessionType(s) === 'uncategorised' ? 'Uncategorised' : getSessionType(s) === 'lesson' ? 'Lesson' : 'Revision'}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
                     <button onClick={(e) => { e.stopPropagation(); onDelete(s.id); }} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
@@ -237,7 +239,7 @@ function TableView({ sessions, onEdit, onDelete, onConfidenceChange }: {
                 </td>
                 <td className="p-3 text-secondary">{s.topic?.name ?? '—'}</td>
                 <td className="p-3 text-secondary whitespace-nowrap">{formatDuration(s.duration_minutes)}</td>
-                <td className="p-3"><span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
+                <td className="p-3"><span className={`badge ${getSessionType(s) === 'lesson' ? 'bg-sky-500/15 text-sky-400' : getSessionType(s) === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{getSessionType(s) === 'uncategorised' ? 'Uncategorised' : getSessionType(s) === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
                 <td className="p-3"><span className="text-xs text-secondary">{s.tracking_method === 'timer' ? 'Timer' : 'Manual'}</span></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={10} /></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}>
@@ -315,7 +317,7 @@ function CalendarView({ sessions, onEdit }: {
                     className="block w-full text-left text-[10px] px-1.5 py-0.5 rounded truncate hover:opacity-80"
                     style={{ backgroundColor: `${s.subject?.color}25`, color: s.subject?.color }}
                   >
-                    {s.session_type === 'lesson' ? 'Lesson · ' : s.session_type === 'revision' ? 'Revision · ' : ''}{s.title}
+                    {getSessionType(s) === 'lesson' ? 'Lesson · ' : getSessionType(s) === 'revision' ? 'Revision · ' : ''}{s.title}
                   </button>
                 ))}
                 {daySessions.length > 2 && <p className="text-[10px] text-tertiary px-1">+{daySessions.length - 2} more</p>}
@@ -358,7 +360,7 @@ function SubjectView({ sessions, subjects, onEdit, onDelete }: {
                 <div key={s.id} role="button" tabIndex={0} onClick={() => onEdit(s)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit(s); }} className="flex items-center justify-between p-3 rounded-lg surface-tertiary group cursor-pointer">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-primary truncate">{s.title}</p>
-                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)} · {s.session_type === 'lesson' ? 'Lesson' : s.session_type === 'revision' ? 'Revision' : 'Uncategorised'}</p>
+                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)} · {getSessionType(s) === 'lesson' ? 'Lesson' : getSessionType(s) === 'revision' ? 'Revision' : 'Uncategorised'}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <ConfidenceDots value={s.confidence} size={10} />
@@ -388,7 +390,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
   const draftKey = `studytrack:study-session-draft:${userId}:${session?.id ?? 'new'}`;
   const [savedDraft] = useState<Partial<{
     subjectId: string; topicId: string; title: string; description: string;
-    personalNotes: string; studiedDate: string; duration: number; confidence: number;
+    personalNotes: string; studiedDate: string; duration: number; confidence: number; sessionType: 'lesson' | 'revision' | 'uncategorised';
   }>>(() => {
     try {
       return JSON.parse(window.localStorage.getItem(draftKey) ?? '{}');
@@ -404,16 +406,17 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
   const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? savedDraft.studiedDate ?? new Date().toISOString().split('T')[0]);
   const [duration, setDuration] = useState(session?.duration_minutes ?? savedDraft.duration ?? 60);
   const [confidence, setConfidence] = useState(session?.confidence ?? savedDraft.confidence ?? 3);
-  const [sessionType, setSessionType] = useState(session?.session_type ?? 'uncategorised');
+  const [sessionType, setSessionType] = useState<'lesson' | 'revision' | 'uncategorised'>(session ? getSessionType(session) : savedDraft.sessionType ?? 'uncategorised');
   const [activity, setActivity] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Keep unfinished work safe when the page unmounts, the tab changes, or the browser reloads.
   useEffect(() => {
     window.localStorage.setItem(draftKey, JSON.stringify({
-      subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence,
+      subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence, sessionType,
     }));
-  }, [draftKey, subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence]);
+  }, [draftKey, subjectId, topicId, title, description, personalNotes, studiedDate, duration, confidence, sessionType]);
 
   const closeAndDiscardDraft = () => {
     window.localStorage.removeItem(draftKey);
@@ -429,6 +432,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
 
   const handleSave = async () => {
     setSaving(true);
+    setSaveError('');
     const payload = {
       subject_id: subjectId,
       topic_id: topicId || null,
@@ -441,10 +445,18 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
       session_type: sessionType,
     };
 
-    if (session) {
-      await supabase.from('study_sessions').update(payload).eq('id', session.id);
-    } else {
-      await supabase.from('study_sessions').insert({ ...payload, user_id: userId });
+    const saveResult = session
+      ? await supabase.from('study_sessions').update(payload).eq('id', session.id)
+      : await supabase.from('study_sessions').insert({ ...payload, user_id: userId });
+
+    if (saveResult.error) {
+      console.error('Failed to save study session:', saveResult.error);
+      const missingTypeColumn = saveResult.error.message.toLowerCase().includes('session_type');
+      setSaveError(missingTypeColumn
+        ? 'Session categories are not enabled in your database yet. Apply the migration supabase/migrations/20261125180000_add_study_session_types_and_activity.sql in Supabase, then reload StudyTrack.'
+        : `Could not save this session: ${saveResult.error.message}`);
+      setSaving(false);
+      return;
     }
 
     // Create/update revision record for this topic
@@ -539,6 +551,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
           <label className="block text-sm font-medium text-secondary mb-1.5">Personal notes</label>
           <textarea className="input min-h-[60px]" value={personalNotes} onChange={(e) => setPersonalNotes(e.target.value)} placeholder="Any personal notes, things to remember, questions..." />
         </div>
+        {saveError && <div role="alert" className="rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{saveError}</div>}
         {session && <div className="border-t border-app pt-4 mt-2"><h3 className="font-semibold text-primary mb-3">Activity history</h3>{activity.length === 0 ? <p className="text-sm text-tertiary">No changes recorded yet.</p> : <div className="space-y-3 max-h-56 overflow-y-auto">{activity.map((entry) => <div key={entry.id} className="text-sm border-l-2 border-brand-500 pl-3"><p className="text-xs text-tertiary">{new Date(entry.changed_at).toLocaleString()}</p><p className="font-medium text-primary capitalize">{entry.field_name.replaceAll('_', ' ')} changed</p><p className="text-secondary">{String(entry.old_value ?? 'Empty')} → {String(entry.new_value ?? 'Empty')}</p></div>)}</div>}</div>}
         <div className="flex gap-3 justify-end pt-2">
           <button onClick={closeAndDiscardDraft} className="btn btn-secondary">Cancel</button>
