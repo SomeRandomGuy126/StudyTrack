@@ -6,6 +6,7 @@ import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, Max
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
+type ResumeSession = { id: string; title: string; subject_id: string; topic_id: string | null; duration_minutes: number; confidence: number; session_type: 'lesson' | 'revision' | 'uncategorised'; studied_date: string };
 
 function formatClock(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -61,6 +62,9 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
   const [topicId, setTopicId] = useState<string>(savedState.topicId ?? '');
   const [title, setTitle] = useState<string>(savedState.title ?? '');
   const [confidence, setConfidence] = useState<number>(savedState.confidence ?? 3);
+  const [sessionType, setSessionType] = useState<'lesson' | 'revision' | 'uncategorised'>(savedState.sessionType ?? 'uncategorised');
+  const [resumeSessionId, setResumeSessionId] = useState<string | null>(savedState.resumeSessionId ?? null);
+  const [resumeSessions, setResumeSessions] = useState<ResumeSession[]>([]);
   const [elapsedMs, setElapsedMs] = useState<number>(savedState.elapsedMs ?? 0);
   const [now, setNow] = useState(Date.now());
   const [startedAt, setStartedAt] = useState<number | null>(savedState.startedAt ?? null);
@@ -71,9 +75,14 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify({
-      mode, minutes, subjectId, topicId, title, confidence, elapsedMs, startedAt, running, finished, minimized,
+      mode, minutes, subjectId, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized,
     }));
-  }, [storageKey, mode, minutes, subjectId, topicId, title, confidence, elapsedMs, startedAt, running, finished, minimized]);
+  }, [storageKey, mode, minutes, subjectId, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized]);
+
+  useEffect(() => {
+    if (!user) return;
+    supabase.from('study_sessions').select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date').eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100).then(({ data }) => setResumeSessions((data ?? []) as ResumeSession[]));
+  }, [user?.id]);
   const targetMs = Math.max(1, minutes) * 60_000;
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
@@ -132,10 +141,13 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       studied_date: (() => { const date = new Date(); return new Date(date.getTime() - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 10); })(),
       duration_minutes: duration,
       confidence,
+      session_type: sessionType,
       tracking_method: 'timer',
     };
 
-    let { error } = await supabase.from('study_sessions').insert(sessionPayload);
+    let { error } = resumeSessionId
+      ? await supabase.from('study_sessions').update({ duration_minutes: duration, confidence, title: sessionPayload.title, description: sessionPayload.description, session_type: sessionType }).eq('id', resumeSessionId).eq('user_id', user.id)
+      : await supabase.from('study_sessions').insert(sessionPayload);
 
     // Older databases may not have the optional tracking_method column yet.
     // Retry without it so a schema migration gap cannot block saving study time.
@@ -159,6 +171,9 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     }
     reset();
     setTitle('');
+    setResumeSessionId(null);
+    setElapsedMs(0);
+    setSessionType('uncategorised');
     onSaved();
   };
 
@@ -199,6 +214,17 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
             {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
           </select>
         </label>
+        <label className="text-sm text-secondary">Continue a previous session
+          <select className="input mt-1" value={resumeSessionId ?? ''} disabled={disabledSettings} onChange={(e) => {
+            const selected = resumeSessions.find((item) => item.id === e.target.value);
+            setResumeSessionId(selected?.id ?? null);
+            if (selected) { setSubjectId(selected.subject_id); setTopicId(selected.topic_id ?? ''); setTitle(selected.title); setConfidence(selected.confidence); setSessionType(selected.session_type ?? 'uncategorised'); setElapsedMs(selected.duration_minutes * 60_000); setMode('stopwatch'); setFinished(false); }
+            else { setElapsedMs(0); }
+          }}>
+            <option value="">Start a new session</option>
+            {resumeSessions.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.duration_minutes}m · {item.studied_date}</option>)}
+          </select>
+        </label>
         <label className="text-sm text-secondary">Topic
           <select className="input mt-1" value={topicId} disabled={disabledSettings} onChange={(e) => setTopicId(e.target.value)}>
             <option value="">No specific topic</option>
@@ -213,6 +239,9 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
             <input className="input mt-1" type="number" min="1" max="1440" value={minutes} disabled={disabledSettings} onChange={(e) => setMinutes(Math.max(1, Math.min(1440, Number(e.target.value) || 1)))} />
           </label>
         )}
+        <label className="text-sm text-secondary">Session type
+          <select className="input mt-1" value={sessionType} disabled={disabledSettings} onChange={(e) => setSessionType(e.target.value as 'lesson' | 'revision' | 'uncategorised')}><option value="uncategorised">Uncategorised</option><option value="lesson">Lesson</option><option value="revision">Revision</option></select>
+        </label>
         <label className="text-sm text-secondary">Confidence after studying
           <select className="input mt-1" value={confidence} disabled={disabledSettings} onChange={(e) => setConfidence(Number(e.target.value))}>
             <option value={1}>Very low</option><option value={2}>Low</option><option value={3}>Okay</option><option value={4}>Good</option><option value={5}>Very good</option>
@@ -230,7 +259,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
           )}
           {running && <button type="button" onClick={pause} className="btn btn-secondary"><Pause size={16} /> Pause</button>}
           {(elapsedMs > 0 || finished) && !running && <button type="button" onClick={reset} className="btn btn-secondary"><RotateCcw size={16} /> Reset</button>}
-          {(elapsedMs >= 60_000 || finished) && !running && <button type="button" onClick={save} disabled={saving} className="btn btn-primary"><Save size={16} /> {saving ? 'Saving…' : 'Finish & save session'}</button>}
+          {(elapsedMs >= 60_000 || finished) && !running && <button type="button" onClick={save} disabled={saving} className="btn btn-primary"><Save size={16} /> {saving ? 'Saving…' : resumeSessionId ? 'Update & finish session' : 'Finish & save session'}</button>}
         </div>
         {elapsedMs > 0 && elapsedMs < 60_000 && !running && <p className="text-xs text-tertiary mt-3">Study for at least one minute to save a session.</p>}
       </div>
