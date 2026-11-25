@@ -24,14 +24,19 @@ export function StudyTrackerPage() {
   const [confirmClearHistory, setConfirmClearHistory] = useState(false);
   const [search, setSearch] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [filterMethod, setFilterMethod] = useState<string>('all');
+  const [visibleCount, setVisibleCount] = useState(25);
 
   const filtered = useMemo(() => {
     return data.studySessions.filter((s) => {
       if (filterSubject !== 'all' && s.subject_id !== filterSubject) return false;
+      if (filterType !== 'all' && s.session_type !== filterType) return false;
+      if (filterMethod !== 'all' && s.tracking_method !== filterMethod) return false;
       if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !s.subject?.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [data.studySessions, search, filterSubject]);
+  }, [data.studySessions, search, filterSubject, filterType, filterMethod]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -81,6 +86,8 @@ export function StudyTrackerPage() {
           <option value="all">All subjects</option>
           {data.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
+        <select className="input sm:w-40" value={filterType} onChange={(e) => setFilterType(e.target.value)}><option value="all">All session types</option><option value="lesson">Lessons</option><option value="revision">Revision</option><option value="uncategorised">Uncategorised</option></select>
+        <select className="input sm:w-40" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}><option value="all">All sources</option><option value="timer">Timer recorded</option><option value="manual">Manually added</option></select>
         {data.studySessions.length > 0 && (
           <button type="button" onClick={() => setConfirmClearHistory(true)} className="btn btn-secondary text-red-500">Clear history</button>
         )}
@@ -106,14 +113,15 @@ export function StudyTrackerPage() {
           />
         </div>
       ) : view === 'list' ? (
-        <ListView sessions={filtered} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} />
+        <ListView sessions={filtered.slice(0, visibleCount)} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} onConfidenceChange={async (s, confidence) => { await supabase.from('study_sessions').update({ confidence }).eq('id', s.id); data.refresh(); }} />
       ) : view === 'table' ? (
-        <TableView sessions={filtered} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} />
+        <TableView sessions={filtered.slice(0, visibleCount)} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} onConfidenceChange={async (s, confidence) => { await supabase.from('study_sessions').update({ confidence }).eq('id', s.id); data.refresh(); }} />
       ) : view === 'calendar' ? (
         <CalendarView sessions={filtered} onEdit={(s) => { setEditing(s); setShowModal(true); }} />
       ) : (
-        <SubjectView sessions={filtered} subjects={data.subjects} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} />
+        <SubjectView sessions={filtered.slice(0, visibleCount)} subjects={data.subjects} onEdit={(s) => { setEditing(s); setShowModal(true); }} onDelete={(id) => setDeleteId(id)} />
       )}
+      {filtered.length > visibleCount && <div className="flex justify-center mt-4"><button className="btn btn-secondary" onClick={() => setVisibleCount((n) => n + 25)}>Load more sessions ({filtered.length - visibleCount} remaining)</button></div>}
 
       {showModal && (
         <StudySessionModal
@@ -147,15 +155,16 @@ export function StudyTrackerPage() {
   );
 }
 
-function ListView({ sessions, onEdit, onDelete }: {
+function ListView({ sessions, onEdit, onDelete, onConfidenceChange }: {
   sessions: StudySession[];
   onEdit: (s: StudySession) => void;
   onDelete: (id: string) => void;
+  onConfidenceChange: (s: StudySession, confidence: number) => void;
 }) {
   return (
     <div className="space-y-2">
       {sessions.map((s) => (
-        <div key={s.id} className="card p-4 group hover:shadow-md transition-shadow">
+        <div key={s.id} role="button" tabIndex={0} onClick={() => onEdit(s)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit(s); }} className="card p-4 group hover:shadow-md transition-shadow cursor-pointer">
           <div className="flex items-start gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${s.subject?.color}20`, color: s.subject?.color }}>
               <BookOpen size={20} />
@@ -165,22 +174,23 @@ function ListView({ sessions, onEdit, onDelete }: {
                 <div className="min-w-0">
                   <p className="font-medium text-primary truncate">{s.title}</p>
                   <p className="text-xs text-tertiary mt-0.5">
-                    {s.subject?.name} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)}
+                    {s.subject?.name} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)} · {s.tracking_method === 'timer' ? 'Timer recorded' : 'Manually added'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className="badge" style={{ backgroundColor: `${s.subject?.color}15`, color: s.subject?.color }}>
                     {formatDuration(s.duration_minutes)}
                   </span>
+                  <span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button onClick={() => onEdit(s)} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
-                    <button onClick={() => onDelete(s.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
+                    <button onClick={(e) => { e.stopPropagation(); onDelete(s.id); }} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
                   </div>
                 </div>
               </div>
               {s.description && <p className="text-sm text-secondary mt-2 line-clamp-2">{s.description}</p>}
               <div className="flex items-center gap-3 mt-2">
-                <ConfidenceDots value={s.confidence} size={12} />
+                <div onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={12} /></div>
                 <span className="text-xs text-tertiary">{confidenceLabel(s.confidence)}</span>
               </div>
             </div>
@@ -191,10 +201,11 @@ function ListView({ sessions, onEdit, onDelete }: {
   );
 }
 
-function TableView({ sessions, onEdit, onDelete }: {
+function TableView({ sessions, onEdit, onDelete, onConfidenceChange }: {
   sessions: StudySession[];
   onEdit: (s: StudySession) => void;
   onDelete: (id: string) => void;
+  onConfidenceChange: (s: StudySession, confidence: number) => void;
 }) {
   return (
     <div className="card overflow-hidden">
@@ -207,13 +218,15 @@ function TableView({ sessions, onEdit, onDelete }: {
               <th className="text-left p-3 font-medium text-secondary">Subject</th>
               <th className="text-left p-3 font-medium text-secondary">Topic</th>
               <th className="text-left p-3 font-medium text-secondary">Duration</th>
+              <th className="text-left p-3 font-medium text-secondary">Type</th>
+              <th className="text-left p-3 font-medium text-secondary">Source</th>
               <th className="text-left p-3 font-medium text-secondary">Confidence</th>
               <th className="p-3"></th>
             </tr>
           </thead>
           <tbody>
             {sessions.map((s) => (
-              <tr key={s.id} className="border-t border-app hover:surface-tertiary transition-colors group">
+              <tr key={s.id} onClick={() => onEdit(s)} className="border-t border-app hover:surface-tertiary transition-colors group cursor-pointer">
                 <td className="p-3 text-secondary whitespace-nowrap">{formatShortDate(s.studied_date)}</td>
                 <td className="p-3 text-primary font-medium">{s.title}</td>
                 <td className="p-3">
@@ -224,8 +237,10 @@ function TableView({ sessions, onEdit, onDelete }: {
                 </td>
                 <td className="p-3 text-secondary">{s.topic?.name ?? '—'}</td>
                 <td className="p-3 text-secondary whitespace-nowrap">{formatDuration(s.duration_minutes)}</td>
-                <td className="p-3"><ConfidenceDots value={s.confidence} size={10} /></td>
-                <td className="p-3">
+                <td className="p-3"><span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
+                <td className="p-3"><span className="text-xs text-secondary">{s.tracking_method === 'timer' ? 'Timer' : 'Manual'}</span></td>
+                <td className="p-3" onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={10} /></td>
+                <td className="p-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => onEdit(s)} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
                     <button onClick={() => onDelete(s.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
@@ -300,7 +315,7 @@ function CalendarView({ sessions, onEdit }: {
                     className="block w-full text-left text-[10px] px-1.5 py-0.5 rounded truncate hover:opacity-80"
                     style={{ backgroundColor: `${s.subject?.color}25`, color: s.subject?.color }}
                   >
-                    {s.title}
+                    {s.session_type === 'lesson' ? 'Lesson · ' : s.session_type === 'revision' ? 'Revision · ' : ''}{s.title}
                   </button>
                 ))}
                 {daySessions.length > 2 && <p className="text-[10px] text-tertiary px-1">+{daySessions.length - 2} more</p>}
@@ -339,22 +354,21 @@ function SubjectView({ sessions, subjects, onEdit, onDelete }: {
               </div>
             </div>
             <div className="space-y-2">
-              {subSessions.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg surface-tertiary group">
+              {subSessions.map((s) => (
+                <div key={s.id} role="button" tabIndex={0} onClick={() => onEdit(s)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit(s); }} className="flex items-center justify-between p-3 rounded-lg surface-tertiary group cursor-pointer">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-primary truncate">{s.title}</p>
-                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)}</p>
+                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)} · {s.session_type === 'lesson' ? 'Lesson' : s.session_type === 'revision' ? 'Revision' : 'Uncategorised'}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <ConfidenceDots value={s.confidence} size={10} />
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onEdit(s)} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
-                      <button onClick={() => onDelete(s.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(s.id); }} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </div>
               ))}
-              {subSessions.length > 5 && <p className="text-xs text-tertiary text-center pt-2">+ {subSessions.length - 5} more sessions</p>}
             </div>
           </div>
         );
@@ -390,6 +404,8 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
   const [studiedDate, setStudiedDate] = useState(session?.studied_date ?? savedDraft.studiedDate ?? new Date().toISOString().split('T')[0]);
   const [duration, setDuration] = useState(session?.duration_minutes ?? savedDraft.duration ?? 60);
   const [confidence, setConfidence] = useState(session?.confidence ?? savedDraft.confidence ?? 3);
+  const [sessionType, setSessionType] = useState(session?.session_type ?? 'uncategorised');
+  const [activity, setActivity] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
 
   // Keep unfinished work safe when the page unmounts, the tab changes, or the browser reloads.
@@ -404,6 +420,11 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
     onClose();
   };
 
+  useEffect(() => {
+    if (!session) return;
+    supabase.from('study_session_activity').select('*').eq('session_id', session.id).order('changed_at', { ascending: false }).then(({ data: rows }) => setActivity(rows ?? []));
+  }, [session?.id]);
+
   const subjectTopics = topics.filter((t) => t.subject_id === subjectId);
 
   const handleSave = async () => {
@@ -417,6 +438,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
       studied_date: studiedDate,
       duration_minutes: duration,
       confidence,
+      session_type: sessionType,
     };
 
     if (session) {
@@ -485,6 +507,10 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
           </div>
         </div>
         <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Session type</label>
+          <select className="input" value={sessionType} onChange={(e) => setSessionType(e.target.value as 'lesson' | 'revision' | 'uncategorised')}><option value="uncategorised">Uncategorised</option><option value="lesson">Lesson</option><option value="revision">Revision</option></select>
+        </div>
+        <div>
           <label className="block text-sm font-medium text-secondary mb-1.5">Title</label>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Mitosis lesson" autoFocus />
         </div>
@@ -513,6 +539,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
           <label className="block text-sm font-medium text-secondary mb-1.5">Personal notes</label>
           <textarea className="input min-h-[60px]" value={personalNotes} onChange={(e) => setPersonalNotes(e.target.value)} placeholder="Any personal notes, things to remember, questions..." />
         </div>
+        {session && <div className="border-t border-app pt-4 mt-2"><h3 className="font-semibold text-primary mb-3">Activity history</h3>{activity.length === 0 ? <p className="text-sm text-tertiary">No changes recorded yet.</p> : <div className="space-y-3 max-h-56 overflow-y-auto">{activity.map((entry) => <div key={entry.id} className="text-sm border-l-2 border-brand-500 pl-3"><p className="text-xs text-tertiary">{new Date(entry.changed_at).toLocaleString()}</p><p className="font-medium text-primary capitalize">{entry.field_name.replaceAll('_', ' ')} changed</p><p className="text-secondary">{String(entry.old_value ?? 'Empty')} → {String(entry.new_value ?? 'Empty')}</p></div>)}</div>}</div>}
         <div className="flex gap-3 justify-end pt-2">
           <button onClick={closeAndDiscardDraft} className="btn btn-secondary">Cancel</button>
           <button onClick={handleSave} disabled={saving || !title.trim() || !subjectId} className="btn btn-primary disabled:opacity-50">
