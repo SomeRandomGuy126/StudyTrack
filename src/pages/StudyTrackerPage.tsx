@@ -240,7 +240,7 @@ function TableView({ sessions, onEdit, onDelete, onConfidenceChange }: {
                 <td className="p-3"><span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
                 <td className="p-3"><span className="text-xs text-secondary">{s.tracking_method === 'timer' ? 'Timer' : 'Manual'}</span></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={10} /></td>
-                <td className="p-3">
+                <td className="p-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <button onClick={() => onEdit(s)} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
                     <button onClick={() => onDelete(s.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
