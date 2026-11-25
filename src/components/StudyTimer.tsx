@@ -70,6 +70,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
   const [startedAt, setStartedAt] = useState<number | null>(savedState.startedAt ?? null);
   const [running, setRunning] = useState<boolean>(savedState.running ?? false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
   const [finished, setFinished] = useState<boolean>(savedState.finished ?? false);
   const [minimized, setMinimized] = useState<boolean>(savedState.minimized ?? false);
 
@@ -130,6 +131,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     const duration = Math.floor(actualMs / 60_000);
     if (duration < 1) return;
     setSaving(true);
+    setSaveError('');
     const selectedTopic = topics.find((topic) => topic.id === topicId);
     const sessionPayload = {
       user_id: user.id,
@@ -166,7 +168,10 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     setSaving(false);
     if (error) {
       console.error('Failed to save study session:', error);
-      window.alert('Could not save this study session. Please try again.');
+      const missingTypeColumn = error.message.toLowerCase().includes('session_type');
+      setSaveError(missingTypeColumn
+        ? 'Session categories are not enabled in your database yet. Apply supabase/migrations/20261125180000_add_study_session_types_and_activity.sql in Supabase, then reload StudyTrack.'
+        : `Could not save this study session: ${error.message}`);
       return;
     }
     reset();
@@ -191,6 +196,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
         </div>
       </div>
       {!minimized && <>
+      {saveError && <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{saveError}</div>
       <div className="flex flex-col gap-3 mb-4 min-w-0">
         <div>
           <div className="flex items-center gap-2">
