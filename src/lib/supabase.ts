@@ -64,11 +64,22 @@ export type StudySession = {
   studied_date: string;
   duration_minutes: number;
   tracking_method: 'manual' | 'timer';
+  session_type: 'lesson' | 'revision' | 'uncategorised';
   confidence: number;
   attachment_url: string | null;
   created_at: string;
   subject?: Subject;
   topic?: Topic;
+};
+
+export type StudySessionActivity = {
+  id: string;
+  session_id: string;
+  user_id: string;
+  field_name: string;
+  old_value: unknown;
+  new_value: unknown;
+  changed_at: string;
 };
 
 export type Revision = {
