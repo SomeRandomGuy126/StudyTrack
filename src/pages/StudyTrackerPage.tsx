@@ -315,7 +315,7 @@ function CalendarView({ sessions, onEdit }: {
                     className="block w-full text-left text-[10px] px-1.5 py-0.5 rounded truncate hover:opacity-80"
                     style={{ backgroundColor: `${s.subject?.color}25`, color: s.subject?.color }}
                   >
-                    {s.title}
+                    {s.session_type === 'lesson' ? 'Lesson · ' : s.session_type === 'revision' ? 'Revision · ' : ''}{s.title}
                   </button>
                 ))}
                 {daySessions.length > 2 && <p className="text-[10px] text-tertiary px-1">+{daySessions.length - 2} more</p>}
@@ -354,22 +354,21 @@ function SubjectView({ sessions, subjects, onEdit, onDelete }: {
               </div>
             </div>
             <div className="space-y-2">
-              {subSessions.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center justify-between p-3 rounded-lg surface-tertiary group">
+              {subSessions.map((s) => (
+                <div key={s.id} role="button" tabIndex={0} onClick={() => onEdit(s)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onEdit(s); }} className="flex items-center justify-between p-3 rounded-lg surface-tertiary group cursor-pointer">
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-primary truncate">{s.title}</p>
-                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)}</p>
+                    <p className="text-xs text-tertiary">{s.topic?.name ?? 'No topic'} · {formatShortDate(s.studied_date)} · {s.session_type === 'lesson' ? 'Lesson' : s.session_type === 'revision' ? 'Revision' : 'Uncategorised'}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <ConfidenceDots value={s.confidence} size={10} />
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => onEdit(s)} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
-                      <button onClick={() => onDelete(s.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onEdit(s); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
+                      <button onClick={(e) => { e.stopPropagation(); onDelete(s.id); }} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
                     </div>
                   </div>
                 </div>
               ))}
-              {subSessions.length > 5 && <p className="text-xs text-tertiary text-center pt-2">+ {subSessions.length - 5} more sessions</p>}
             </div>
           </div>
         );
