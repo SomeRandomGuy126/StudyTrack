@@ -196,7 +196,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
         </div>
       </div>
       {!minimized && <>
-      {saveError && <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{saveError}</div>
+      {saveError && <div role="alert" className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-400">{saveError}</div>}
       <div className="flex flex-col gap-3 mb-4 min-w-0">
         <div>
           <div className="flex items-center gap-2">
