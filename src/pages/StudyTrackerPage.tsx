@@ -25,16 +25,18 @@ export function StudyTrackerPage() {
   const [search, setSearch] = useState('');
   const [filterSubject, setFilterSubject] = useState<string>('all');
   const [filterType, setFilterType] = useState<string>('all');
+  const [filterMethod, setFilterMethod] = useState<string>('all');
   const [visibleCount, setVisibleCount] = useState(25);
 
   const filtered = useMemo(() => {
     return data.studySessions.filter((s) => {
       if (filterSubject !== 'all' && s.subject_id !== filterSubject) return false;
       if (filterType !== 'all' && s.session_type !== filterType) return false;
+      if (filterMethod !== 'all' && s.tracking_method !== filterMethod) return false;
       if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !s.subject?.name.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [data.studySessions, search, filterSubject, filterType]);
+  }, [data.studySessions, search, filterSubject, filterType, filterMethod]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -85,6 +87,7 @@ export function StudyTrackerPage() {
           {data.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
         <select className="input sm:w-40" value={filterType} onChange={(e) => setFilterType(e.target.value)}><option value="all">All session types</option><option value="lesson">Lessons</option><option value="revision">Revision</option><option value="uncategorised">Uncategorised</option></select>
+        <select className="input sm:w-40" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}><option value="all">All sources</option><option value="timer">Timer recorded</option><option value="manual">Manually added</option></select>
         {data.studySessions.length > 0 && (
           <button type="button" onClick={() => setConfirmClearHistory(true)} className="btn btn-secondary text-red-500">Clear history</button>
         )}
@@ -152,7 +155,7 @@ export function StudyTrackerPage() {
   );
 }
 
-function ListView({ sessions, onEdit, onDelete }: {
+function ListView({ sessions, onEdit, onDelete, onConfidenceChange }: {
   sessions: StudySession[];
   onEdit: (s: StudySession) => void;
   onDelete: (id: string) => void;
@@ -171,7 +174,7 @@ function ListView({ sessions, onEdit, onDelete }: {
                 <div className="min-w-0">
                   <p className="font-medium text-primary truncate">{s.title}</p>
                   <p className="text-xs text-tertiary mt-0.5">
-                    {s.subject?.name} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)}
+                    {s.subject?.name} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)} · {s.tracking_method === 'timer' ? 'Timer recorded' : 'Manually added'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -198,7 +201,7 @@ function ListView({ sessions, onEdit, onDelete }: {
   );
 }
 
-function TableView({ sessions, onEdit, onDelete }: {
+function TableView({ sessions, onEdit, onDelete, onConfidenceChange }: {
   sessions: StudySession[];
   onEdit: (s: StudySession) => void;
   onDelete: (id: string) => void;
@@ -216,6 +219,7 @@ function TableView({ sessions, onEdit, onDelete }: {
               <th className="text-left p-3 font-medium text-secondary">Topic</th>
               <th className="text-left p-3 font-medium text-secondary">Duration</th>
               <th className="text-left p-3 font-medium text-secondary">Type</th>
+              <th className="text-left p-3 font-medium text-secondary">Source</th>
               <th className="text-left p-3 font-medium text-secondary">Confidence</th>
               <th className="p-3"></th>
             </tr>
@@ -234,6 +238,7 @@ function TableView({ sessions, onEdit, onDelete }: {
                 <td className="p-3 text-secondary">{s.topic?.name ?? '—'}</td>
                 <td className="p-3 text-secondary whitespace-nowrap">{formatDuration(s.duration_minutes)}</td>
                 <td className="p-3"><span className={`badge ${s.session_type === 'lesson' ? 'bg-sky-500/15 text-sky-400' : s.session_type === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{s.session_type === 'uncategorised' ? 'Uncategorised' : s.session_type === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
+                <td className="p-3"><span className="text-xs text-secondary">{s.tracking_method === 'timer' ? 'Timer' : 'Manual'}</span></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={10} /></td>
                 <td className="p-3">
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
