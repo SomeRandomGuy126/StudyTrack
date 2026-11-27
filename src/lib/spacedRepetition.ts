@@ -1,6 +1,27 @@
 // Spaced repetition engine for StudyTrack
 // Calculates next revision due date based on revision number, confidence, recall rating, and difficulty.
 
+export function getNextAvailableRevisionDate(
+  proposedDate: Date,
+  scheduledDates: string[],
+  dailyLimit = 2
+): Date {
+  const counts = new Map<string, number>();
+  for (const date of scheduledDates) counts.set(date, (counts.get(date) ?? 0) + 1);
+  const candidate = new Date(proposedDate);
+  candidate.setHours(12, 0, 0, 0);
+  for (let attempts = 0; attempts < 366; attempts += 1) {
+    const key = `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+    if ((counts.get(key) ?? 0) < dailyLimit) return candidate;
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
+
+export function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 const BASE_INTERVALS = [2, 7, 14, 30, 60, 90, 120];
 
 export function calculateNextInterval(
