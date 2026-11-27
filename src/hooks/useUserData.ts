@@ -59,10 +59,9 @@ export function useUserData() {
       return;
     }
     if (showLoading) setLoading(true);
-    const [subs, tops, studies, revs, tsk, proj, nts, fcs, decks, evs] = await Promise.all([
+    const [subs, tops, revs, tsk, proj, nts, fcs, decks, evs] = await Promise.all([
       supabase.from('subjects').select('*').order('position'),
       supabase.from('topics').select('*').order('position'),
-      supabase.from('study_sessions').select('*, subject:subjects(*), topic:topics(*), session_subjects(subject_id, subject:subjects(*))').order('studied_date', { ascending: false }),
       supabase.from('revisions').select('*, topic:topics(*), subject:subjects(*)').order('next_due_date'),
       supabase.from('tasks').select('*, project:projects(*), subject:subjects(*), subtasks(*)').order('position'),
       supabase.from('projects').select('*').order('position'),
@@ -72,11 +71,25 @@ export function useUserData() {
       supabase.from('calendar_events').select('*, subject:subjects(*)').order('start_date'),
     ]);
 
+    // Keep legacy session history visible if the optional multi-subject join table
+    // has not yet been migrated into this Supabase project.
+    const studies = await supabase.from('study_sessions')
+      .select('*, subject:subjects(*), topic:topics(*), session_subjects(subject_id, subject:subjects(*))')
+      .order('studied_date', { ascending: false });
+    let studyRows: unknown[] = studies.data ?? [];
+    if (studies.error) {
+      const legacyStudies = await supabase.from('study_sessions')
+        .select('*, subject:subjects(*), topic:topics(*)')
+        .order('studied_date', { ascending: false });
+      if (!legacyStudies.error) studyRows = legacyStudies.data ?? [];
+      else console.error('Could not load study session history:', studies.error, legacyStudies.error);
+    }
+
     const nextData: CachedUserData = {
       timestamp: Date.now(),
       subjects: (subs.data ?? []) as Subject[],
       topics: (tops.data ?? []) as Topic[],
-      studySessions: (studies.data ?? []) as StudySession[],
+      studySessions: studyRows as StudySession[],
       revisions: (revs.data ?? []) as Revision[],
       tasks: (tsk.data ?? []) as Task[],
       projects: (proj.data ?? []) as Project[],
