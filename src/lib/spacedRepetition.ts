@@ -1,6 +1,27 @@
 // Spaced repetition engine for StudyTrack
 // Calculates next revision due date based on revision number, confidence, recall rating, and difficulty.
 
+export function getNextAvailableRevisionDate(
+  proposedDate: Date,
+  scheduledDates: string[],
+  dailyLimit = 2
+): Date {
+  const counts = new Map<string, number>();
+  for (const date of scheduledDates) counts.set(date, (counts.get(date) ?? 0) + 1);
+  const candidate = new Date(proposedDate);
+  candidate.setHours(12, 0, 0, 0);
+  for (let attempts = 0; attempts < 366; attempts += 1) {
+    const key = `${candidate.getFullYear()}-${String(candidate.getMonth() + 1).padStart(2, '0')}-${String(candidate.getDate()).padStart(2, '0')}`;
+    if ((counts.get(key) ?? 0) < dailyLimit) return candidate;
+    candidate.setDate(candidate.getDate() + 1);
+  }
+  return candidate;
+}
+
+export function localDateKey(date: Date): string {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+}
+
 const BASE_INTERVALS = [2, 7, 14, 30, 60, 90, 120];
 
 export function calculateNextInterval(
@@ -13,8 +34,10 @@ export function calculateNextInterval(
 
   if (revisionNumber <= 0) {
     baseInterval = BASE_INTERVALS[0];
-  } else if (revisionNumber - 1 < BASE_INTERVALS.length) {
-    baseInterval = BASE_INTERVALS[revisionNumber - 1];
+  } else if (revisionNumber < BASE_INTERVALS.length) {
+    // Revision 0 is the first recall after learning (2 days).
+    // Revision 1 is the next recall after that (7 days), then 14, 30, 60...
+    baseInterval = BASE_INTERVALS[revisionNumber];
   } else {
     const lastInterval = BASE_INTERVALS[BASE_INTERVALS.length - 1];
     const extraSteps = revisionNumber - BASE_INTERVALS.length;
@@ -25,8 +48,6 @@ export function calculateNextInterval(
 
   if (effectiveConfidence <= 2) {
     baseInterval = Math.max(1, Math.round(baseInterval * 0.4));
-  } else if (effectiveConfidence === 3) {
-    baseInterval = Math.round(baseInterval * 0.75);
   } else if (effectiveConfidence === 5) {
     baseInterval = Math.round(baseInterval * 1.25);
   }

@@ -56,7 +56,7 @@ export type Topic = {
 export type StudySession = {
   id: string;
   user_id: string;
-  subject_id: string;
+  subject_id: string | null;
   topic_id: string | null;
   title: string;
   description: string | null;
@@ -70,6 +70,7 @@ export type StudySession = {
   created_at: string;
   subject?: Subject;
   topic?: Topic;
+  session_subjects?: { subject_id: string; subject?: Subject }[];
 };
 
 export type StudySessionActivity = {
@@ -160,6 +161,7 @@ export type Note = {
 export type Flashcard = {
   id: string;
   user_id: string;
+  deck_id: string | null;
   subject_id: string | null;
   topic_id: string | null;
   front: string;
@@ -168,6 +170,18 @@ export type Flashcard = {
   times_reviewed: number;
   times_correct: number;
   created_at: string;
+  subject?: Subject;
+  topic?: Topic;
+};
+
+export type FlashcardDeck = {
+  id: string;
+  user_id: string;
+  name: string;
+  subject_id: string | null;
+  topic_id: string | null;
+  created_at: string;
+  updated_at: string;
   subject?: Subject;
   topic?: Topic;
 };

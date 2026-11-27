@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
 import {
   isToday, isOverdue, isThisWeek, relativeDate, formatShortDate,
-  confidenceLabel, calculateNextInterval, CONFIDENCE_LEVELS
+  confidenceLabel, calculateNextInterval, CONFIDENCE_LEVELS, getNextAvailableRevisionDate, localDateKey
 } from '@/lib/spacedRepetition';
 import type { Revision } from '@/lib/supabase';
 import {
@@ -22,6 +22,47 @@ export function RevisionCentrePage({ initialTab = 'overdue' }: { initialTab?: 'd
   const [tab, setTab] = useState<Tab>(initialTab);
   const [completeTarget, setCompleteTarget] = useState<Revision | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Revision | null>(null);
+  const rebalancedUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (data.loading || !user?.id || data.revisions.length === 0 || rebalancedUserRef.current === user.id) return;
+    rebalancedUserRef.current = user.id;
+
+    const today = localDateKey(new Date());
+    const dueRevisions = data.revisions.filter((revision) => revision.status === 'due');
+    const dailyCounts = new Map<string, number>();
+    dueRevisions
+      .filter((revision) => revision.next_due_date > today)
+      .forEach((revision) => dailyCounts.set(revision.next_due_date, (dailyCounts.get(revision.next_due_date) ?? 0) + 1));
+
+    // Move any existing backlog into a small daily queue, prioritising the least-confident topics.
+    const backlog = dueRevisions
+      .filter((revision) => revision.next_due_date <= today)
+      .sort((a, b) => a.confidence - b.confidence || a.next_due_date.localeCompare(b.next_due_date));
+
+    const moves: { revision: Revision; date: string }[] = [];
+    for (const revision of backlog) {
+      const candidate = new Date(`${today}T12:00:00`);
+      while ((dailyCounts.get(localDateKey(candidate)) ?? 0) >= 2) candidate.setDate(candidate.getDate() + 1);
+      const date = localDateKey(candidate);
+      dailyCounts.set(date, (dailyCounts.get(date) ?? 0) + 1);
+      if (date !== revision.next_due_date) moves.push({ revision, date });
+    }
+
+    if (moves.length > 0) {
+      void Promise.all(moves.map(({ revision, date }) => {
+        const anchor = new Date(`${revision.last_revised_date ?? revision.last_studied_date}T12:00:00`);
+        const target = new Date(`${date}T12:00:00`);
+        const interval = Math.max(1, Math.round((target.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24)));
+        return supabase.from('revisions').update({ next_due_date: date, interval_days: interval })
+          .eq('id', revision.id).eq('user_id', user.id);
+      })).then((results) => {
+        const failed = results.find((result) => result.error);
+        if (failed?.error) console.error('Could not rebalance the revision queue:', failed.error);
+        else void data.refresh();
+      });
+    }
+  }, [data.loading, data.revisions, data.refresh, user?.id]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -217,28 +258,38 @@ function CompleteRevisionModal({ revision, userId, onClose, onSaved }: {
     const isDifficult = topic.data?.is_difficult ?? false;
 
     const nextInterval = calculateNextInterval(newRevisionNumber, revision.confidence, recallRating, isDifficult);
-    const nextDue = new Date();
-    nextDue.setDate(nextDue.getDate() + nextInterval);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const proposedDue = new Date(today);
+    proposedDue.setDate(proposedDue.getDate() + nextInterval);
+    const { data: queuedRevisions } = await supabase
+      .from('revisions')
+      .select('next_due_date')
+      .eq('user_id', userId)
+      .eq('status', 'due')
+      .neq('id', revision.id);
+    const nextDue = getNextAvailableRevisionDate(proposedDue, (queuedRevisions ?? []).map((item) => item.next_due_date), 2);
+    const scheduledInterval = Math.max(1, Math.round((nextDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Mark current revision as completed
     await supabase.from('revisions').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      last_revised_date: new Date().toISOString().split('T')[0],
+      last_revised_date: localDateKey(today),
       last_recall_rating: recallRating,
       notes: notes || null,
     }).eq('id', revision.id);
 
-    // Create next revision record
+    // Create the next review on the first day with room in the two-topic daily queue.
     await supabase.from('revisions').insert({
       user_id: userId,
       topic_id: revision.topic_id,
       subject_id: revision.subject_id,
       revision_number: newRevisionNumber,
       last_studied_date: revision.last_studied_date,
-      last_revised_date: new Date().toISOString().split('T')[0],
-      next_due_date: nextDue.toISOString().split('T')[0],
-      interval_days: nextInterval,
+      last_revised_date: localDateKey(today),
+      next_due_date: localDateKey(nextDue),
+      interval_days: scheduledInterval,
       confidence: revision.confidence,
       status: 'due',
     });
@@ -278,7 +329,7 @@ function CompleteRevisionModal({ revision, userId, onClose, onSaved }: {
           <textarea className="input min-h-[60px]" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What did you struggle with? What went well?" />
         </div>
         <div className="bg-brand-500/10 rounded-lg p-3 text-sm text-secondary">
-          Next revision will be scheduled in <span className="font-semibold text-brand-600">{calculateNextInterval(revision.revision_number + 1, revision.confidence, recallRating, false)} days</span>
+          Next revision is normally due in <span className="font-semibold text-brand-600">{calculateNextInterval(revision.revision_number + 1, revision.confidence, recallRating, false)} days</span>. If that date already has two topics scheduled, StudyTrack moves it to the next available day.
         </div>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
