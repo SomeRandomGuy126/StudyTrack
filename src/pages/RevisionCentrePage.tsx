@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
 import {
   isToday, isOverdue, isThisWeek, relativeDate, formatShortDate,
-  confidenceLabel, calculateNextInterval, CONFIDENCE_LEVELS
+  confidenceLabel, calculateNextInterval, CONFIDENCE_LEVELS, getNextAvailableRevisionDate, localDateKey
 } from '@/lib/spacedRepetition';
 import type { Revision } from '@/lib/supabase';
 import {
@@ -217,28 +217,38 @@ function CompleteRevisionModal({ revision, userId, onClose, onSaved }: {
     const isDifficult = topic.data?.is_difficult ?? false;
 
     const nextInterval = calculateNextInterval(newRevisionNumber, revision.confidence, recallRating, isDifficult);
-    const nextDue = new Date();
-    nextDue.setDate(nextDue.getDate() + nextInterval);
+    const today = new Date();
+    today.setHours(12, 0, 0, 0);
+    const proposedDue = new Date(today);
+    proposedDue.setDate(proposedDue.getDate() + nextInterval);
+    const { data: queuedRevisions } = await supabase
+      .from('revisions')
+      .select('next_due_date')
+      .eq('user_id', userId)
+      .eq('status', 'due')
+      .neq('id', revision.id);
+    const nextDue = getNextAvailableRevisionDate(proposedDue, (queuedRevisions ?? []).map((item) => item.next_due_date), 2);
+    const scheduledInterval = Math.max(1, Math.round((nextDue.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)));
 
     // Mark current revision as completed
     await supabase.from('revisions').update({
       status: 'completed',
       completed_at: new Date().toISOString(),
-      last_revised_date: new Date().toISOString().split('T')[0],
+      last_revised_date: localDateKey(today),
       last_recall_rating: recallRating,
       notes: notes || null,
     }).eq('id', revision.id);
 
-    // Create next revision record
+    // Create the next review on the first day with room in the two-topic daily queue.
     await supabase.from('revisions').insert({
       user_id: userId,
       topic_id: revision.topic_id,
       subject_id: revision.subject_id,
       revision_number: newRevisionNumber,
       last_studied_date: revision.last_studied_date,
-      last_revised_date: new Date().toISOString().split('T')[0],
-      next_due_date: nextDue.toISOString().split('T')[0],
-      interval_days: nextInterval,
+      last_revised_date: localDateKey(today),
+      next_due_date: localDateKey(nextDue),
+      interval_days: scheduledInterval,
       confidence: revision.confidence,
       status: 'due',
     });
@@ -278,7 +288,7 @@ function CompleteRevisionModal({ revision, userId, onClose, onSaved }: {
           <textarea className="input min-h-[60px]" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="What did you struggle with? What went well?" />
         </div>
         <div className="bg-brand-500/10 rounded-lg p-3 text-sm text-secondary">
-          Next revision will be scheduled in <span className="font-semibold text-brand-600">{calculateNextInterval(revision.revision_number + 1, revision.confidence, recallRating, false)} days</span>
+          Next revision is normally due in <span className="font-semibold text-brand-600">{calculateNextInterval(revision.revision_number + 1, revision.confidence, recallRating, false)} days</span>. If that date already has two topics scheduled, StudyTrack moves it to the next available day.
         </div>
         <div className="flex gap-3 justify-end">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
