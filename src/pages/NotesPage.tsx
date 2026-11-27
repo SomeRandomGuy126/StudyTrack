@@ -162,7 +162,7 @@ export function NotesPage() {
                   <button onClick={(event) => { event.stopPropagation(); setDeleteId(note.id); }} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
                 </div>
               </div>
-              <div className="text-sm text-secondary line-clamp-4 flex-1 note-content-preview">{note.content ? <div dangerouslySetInnerHTML={{ __html: safeNoteHtml(note.content) }} /> : 'No content'}</div>
+              <div className="text-sm text-secondary line-clamp-4 flex-1 note-content-preview">{note.content ? <div dangerouslySetInnerHTML={{ __html: safeNoteHtml(note.content).replace(/<img\\b[^>]*>/gi, '<span>Image attached</span>') }} /> : 'No content'}</div>
               <div className="flex items-center justify-between mt-3 pt-3 border-t border-app">
                 {note.subject ? (
                   <div className="flex items-center gap-1.5">
