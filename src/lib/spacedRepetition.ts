@@ -34,8 +34,10 @@ export function calculateNextInterval(
 
   if (revisionNumber <= 0) {
     baseInterval = BASE_INTERVALS[0];
-  } else if (revisionNumber - 1 < BASE_INTERVALS.length) {
-    baseInterval = BASE_INTERVALS[revisionNumber - 1];
+  } else if (revisionNumber < BASE_INTERVALS.length) {
+    // Revision 0 is the first recall after learning (2 days).
+    // Revision 1 is the next recall after that (7 days), then 14, 30, 60...
+    baseInterval = BASE_INTERVALS[revisionNumber];
   } else {
     const lastInterval = BASE_INTERVALS[BASE_INTERVALS.length - 1];
     const extraSteps = revisionNumber - BASE_INTERVALS.length;
@@ -46,8 +48,6 @@ export function calculateNextInterval(
 
   if (effectiveConfidence <= 2) {
     baseInterval = Math.max(1, Math.round(baseInterval * 0.4));
-  } else if (effectiveConfidence === 3) {
-    baseInterval = Math.round(baseInterval * 0.75);
   } else if (effectiveConfidence === 5) {
     baseInterval = Math.round(baseInterval * 1.25);
   }
