@@ -163,9 +163,14 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
 
     let sessionId = resumeSessionId;
     let error: { message: string; code?: string } | null = null;
+    const isMissingColumn = (result: { code?: string; message: string } | null, column: string) => Boolean(
+      result &&
+      (result.code === '42703' || result.code === 'PGRST204') &&
+      result.message.toLowerCase().includes(column)
+    );
 
     if (resumeSessionId) {
-      const result = await supabase.from('study_sessions').update({
+      const updatePayload: Record<string, unknown> = {
         duration_minutes: duration,
         confidence,
         title: sessionPayload.title,
@@ -173,10 +178,22 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
         session_type: sessionType,
         subject_id: sessionPayload.subject_id,
         topic_id: sessionPayload.topic_id,
-      }).eq('id', resumeSessionId).eq('user_id', user.id);
+      };
+      let result = await supabase.from('study_sessions').update(updatePayload).eq('id', resumeSessionId).eq('user_id', user.id);
+      if (isMissingColumn(result.error, 'session_type')) {
+        delete updatePayload.session_type;
+        result = await supabase.from('study_sessions').update(updatePayload).eq('id', resumeSessionId).eq('user_id', user.id);
+      }
       error = result.error;
     } else {
-      const result = await supabase.from('study_sessions').insert(sessionPayload).select('id').single();
+      const insertPayload: Record<string, unknown> = { ...sessionPayload };
+      let result = await supabase.from('study_sessions').insert(insertPayload).select('id').single();
+      for (const optionalColumn of ['session_type', 'tracking_method']) {
+        if (isMissingColumn(result.error, optionalColumn)) {
+          delete insertPayload[optionalColumn];
+          result = await supabase.from('study_sessions').insert(insertPayload).select('id').single();
+        }
+      }
       error = result.error;
       sessionId = result.data?.id ?? null;
     }
