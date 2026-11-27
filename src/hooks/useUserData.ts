@@ -73,14 +73,15 @@ export function useUserData() {
 
     // Keep legacy session history visible if the optional multi-subject join table
     // has not yet been migrated into this Supabase project.
-    let studies = await supabase.from('study_sessions')
+    const studies = await supabase.from('study_sessions')
       .select('*, subject:subjects(*), topic:topics(*), session_subjects(subject_id, subject:subjects(*))')
       .order('studied_date', { ascending: false });
+    let studyRows: unknown[] = studies.data ?? [];
     if (studies.error) {
       const legacyStudies = await supabase.from('study_sessions')
         .select('*, subject:subjects(*), topic:topics(*)')
         .order('studied_date', { ascending: false });
-      if (!legacyStudies.error) studies = legacyStudies;
+      if (!legacyStudies.error) studyRows = legacyStudies.data ?? [];
       else console.error('Could not load study session history:', studies.error, legacyStudies.error);
     }
 
@@ -88,7 +89,7 @@ export function useUserData() {
       timestamp: Date.now(),
       subjects: (subs.data ?? []) as Subject[],
       topics: (tops.data ?? []) as Topic[],
-      studySessions: (studies.data ?? []) as StudySession[],
+      studySessions: studyRows as StudySession[],
       revisions: (revs.data ?? []) as Revision[],
       tasks: (tsk.data ?? []) as Task[],
       projects: (proj.data ?? []) as Project[],
