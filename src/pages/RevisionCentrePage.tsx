@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useUserData } from '@/hooks/useUserData';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/contexts/AuthContext';
@@ -22,6 +22,47 @@ export function RevisionCentrePage({ initialTab = 'overdue' }: { initialTab?: 'd
   const [tab, setTab] = useState<Tab>(initialTab);
   const [completeTarget, setCompleteTarget] = useState<Revision | null>(null);
   const [rescheduleTarget, setRescheduleTarget] = useState<Revision | null>(null);
+  const rebalancedUserRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (data.loading || !user?.id || rebalancedUserRef.current === user.id) return;
+    rebalancedUserRef.current = user.id;
+
+    const today = localDateKey(new Date());
+    const dueRevisions = data.revisions.filter((revision) => revision.status === 'due');
+    const dailyCounts = new Map<string, number>();
+    dueRevisions
+      .filter((revision) => revision.next_due_date > today)
+      .forEach((revision) => dailyCounts.set(revision.next_due_date, (dailyCounts.get(revision.next_due_date) ?? 0) + 1));
+
+    // Move any existing backlog into a small daily queue, prioritising the least-confident topics.
+    const backlog = dueRevisions
+      .filter((revision) => revision.next_due_date <= today)
+      .sort((a, b) => a.confidence - b.confidence || a.next_due_date.localeCompare(b.next_due_date));
+
+    const moves: { revision: Revision; date: string }[] = [];
+    for (const revision of backlog) {
+      const candidate = new Date(`${today}T12:00:00`);
+      while ((dailyCounts.get(localDateKey(candidate)) ?? 0) >= 2) candidate.setDate(candidate.getDate() + 1);
+      const date = localDateKey(candidate);
+      dailyCounts.set(date, (dailyCounts.get(date) ?? 0) + 1);
+      if (date !== revision.next_due_date) moves.push({ revision, date });
+    }
+
+    if (moves.length > 0) {
+      void Promise.all(moves.map(({ revision, date }) => {
+        const anchor = new Date(`${revision.last_revised_date ?? revision.last_studied_date}T12:00:00`);
+        const target = new Date(`${date}T12:00:00`);
+        const interval = Math.max(1, Math.round((target.getTime() - anchor.getTime()) / (1000 * 60 * 60 * 24)));
+        return supabase.from('revisions').update({ next_due_date: date, interval_days: interval })
+          .eq('id', revision.id).eq('user_id', user.id);
+      })).then((results) => {
+        const failed = results.find((result) => result.error);
+        if (failed?.error) console.error('Could not rebalance the revision queue:', failed.error);
+        else void data.refresh();
+      });
+    }
+  }, [data.loading, data.revisions, data.refresh, user?.id]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
