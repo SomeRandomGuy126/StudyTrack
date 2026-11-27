@@ -25,7 +25,7 @@ export function RevisionCentrePage({ initialTab = 'overdue' }: { initialTab?: 'd
   const rebalancedUserRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (data.loading || !user?.id || rebalancedUserRef.current === user.id) return;
+    if (data.loading || !user?.id || data.revisions.length === 0 || rebalancedUserRef.current === user.id) return;
     rebalancedUserRef.current = user.id;
 
     const today = localDateKey(new Date());
