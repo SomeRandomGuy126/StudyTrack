@@ -15,6 +15,7 @@ import {
 type View = 'list' | 'table' | 'calendar' | 'subject';
 
 const getSessionType = (session: Pick<StudySession, 'session_type'>) => session.session_type || 'uncategorised';
+const getSessionMethod = (session: Pick<StudySession, 'tracking_method'>) => session.tracking_method || 'manual';
 
 export function StudyTrackerPage() {
   const data = useUserData();
@@ -32,10 +33,12 @@ export function StudyTrackerPage() {
 
   const filtered = useMemo(() => {
     return data.studySessions.filter((s) => {
-      if (filterSubject !== 'all' && s.subject_id !== filterSubject) return false;
+      const subjectIds = [s.subject_id, ...(s.session_subjects ?? []).map((link) => link.subject_id)].filter(Boolean);
+      if (filterSubject !== 'all' && !subjectIds.includes(filterSubject)) return false;
       if (filterType !== 'all' && getSessionType(s) !== filterType) return false;
-      if (filterMethod !== 'all' && s.tracking_method !== filterMethod) return false;
-      if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !s.subject?.name.toLowerCase().includes(search.toLowerCase())) return false;
+      if (filterMethod !== 'all' && getSessionMethod(s) !== filterMethod) return false;
+      const subjectNames = [s.subject?.name, ...(s.session_subjects ?? []).map((link) => link.subject?.name)].filter(Boolean).join(' ').toLowerCase();
+      if (search && !s.title.toLowerCase().includes(search.toLowerCase()) && !subjectNames.includes(search.toLowerCase())) return false;
       return true;
     });
   }, [data.studySessions, search, filterSubject, filterType, filterMethod]);
@@ -88,8 +91,16 @@ export function StudyTrackerPage() {
           <option value="all">All subjects</option>
           {data.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <select className="input sm:w-40" value={filterType} onChange={(e) => setFilterType(e.target.value)}><option value="all">All session types</option><option value="lesson">Lessons</option><option value="revision">Revision</option><option value="uncategorised">Uncategorised</option></select>
-        <select className="input sm:w-40" value={filterMethod} onChange={(e) => setFilterMethod(e.target.value)}><option value="all">All sources</option><option value="timer">Timer recorded</option><option value="manual">Manually added</option></select>
+        <div className="flex flex-wrap gap-1 surface rounded-lg p-1" aria-label="Filter by session type">
+          {([{ id: 'all', label: 'All types' }, { id: 'lesson', label: 'Lessons' }, { id: 'revision', label: 'Revision' }, { id: 'uncategorised', label: 'Uncategorised' }] as const).map((item) => (
+            <button key={item.id} type="button" onClick={() => setFilterType(item.id)} aria-pressed={filterType === item.id} className={`btn !py-1.5 !px-2.5 text-xs ${filterType === item.id ? 'btn-primary' : 'btn-ghost'}`}>{item.label}</button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-1 surface rounded-lg p-1" aria-label="Filter by session source">
+          {([{ id: 'all', label: 'All sources' }, { id: 'timer', label: 'Timer recorded' }, { id: 'manual', label: 'Manually added' }] as const).map((item) => (
+            <button key={item.id} type="button" onClick={() => setFilterMethod(item.id)} aria-pressed={filterMethod === item.id} className={`btn !py-1.5 !px-2.5 text-xs ${filterMethod === item.id ? 'btn-primary' : 'btn-ghost'}`}>{item.label}</button>
+          ))}
+        </div>
         {data.studySessions.length > 0 && (
           <button type="button" onClick={() => setConfirmClearHistory(true)} className="btn btn-secondary text-red-500">Clear history</button>
         )}
@@ -176,7 +187,7 @@ function ListView({ sessions, onEdit, onDelete, onConfidenceChange }: {
                 <div className="min-w-0">
                   <p className="font-medium text-primary truncate">{s.title}</p>
                   <p className="text-xs text-tertiary mt-0.5">
-                    {s.subject?.name} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)} · {s.tracking_method === 'timer' ? 'Timer recorded' : 'Manually added'}
+                    {(s.session_subjects?.map((link) => link.subject?.name).filter(Boolean).join(', ')) || s.subject?.name || 'No subject'} {s.topic ? `· ${s.topic.name}` : ''} · {formatDate(s.studied_date)} · {getSessionMethod(s) === 'timer' ? 'Timer recorded' : 'Manually added'}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -240,7 +251,7 @@ function TableView({ sessions, onEdit, onDelete, onConfidenceChange }: {
                 <td className="p-3 text-secondary">{s.topic?.name ?? '—'}</td>
                 <td className="p-3 text-secondary whitespace-nowrap">{formatDuration(s.duration_minutes)}</td>
                 <td className="p-3"><span className={`badge ${getSessionType(s) === 'lesson' ? 'bg-sky-500/15 text-sky-400' : getSessionType(s) === 'revision' ? 'bg-violet-500/15 text-violet-400' : 'bg-slate-500/15 text-secondary'}`}>{getSessionType(s) === 'uncategorised' ? 'Uncategorised' : getSessionType(s) === 'lesson' ? 'Lesson' : 'Revision'}</span></td>
-                <td className="p-3"><span className="text-xs text-secondary">{s.tracking_method === 'timer' ? 'Timer' : 'Manual'}</span></td>
+                <td className="p-3"><span className="text-xs text-secondary">{getSessionMethod(s) === 'timer' ? 'Timer' : 'Manual'}</span></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}><ConfidenceDots value={s.confidence} onChange={(v) => onConfidenceChange(s, v)} size={10} /></td>
                 <td className="p-3" onClick={(e) => e.stopPropagation()}>
                   <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -339,7 +350,7 @@ function SubjectView({ sessions, subjects, onEdit, onDelete }: {
   return (
     <div className="space-y-4">
       {subjects.map((subject: any) => {
-        const subSessions = sessions.filter((s) => s.subject_id === subject.id);
+        const subSessions = sessions.filter((s) => s.subject_id === subject.id || s.session_subjects?.some((link) => link.subject_id === subject.id));
         if (subSessions.length === 0) return null;
         const totalMinutes = subSessions.reduce((sum, s) => sum + s.duration_minutes, 0);
         return (
@@ -453,7 +464,7 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
       console.error('Failed to save study session:', saveResult.error);
       const missingTypeColumn = saveResult.error.message.toLowerCase().includes('session_type');
       setSaveError(missingTypeColumn
-        ? 'Session categories are not enabled in your database yet. Apply the migration supabase/migrations/20261125180000_add_study_session_types_and_activity.sql in Supabase, then reload StudyTrack.'
+        ? 'The connected database is missing the session-category update. Deploy the latest StudyTrack database migrations to the same Supabase project as this app.'
         : `Could not save this session: ${saveResult.error.message}`);
       setSaving(false);
       return;
