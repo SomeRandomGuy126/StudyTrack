@@ -7,6 +7,7 @@ const DATA_REFRESH_EVENT = 'studytrack:data-refresh';
 
 type CachedUserData = {
   timestamp: number;
+  flashcardDecks: import('@/lib/supabase').FlashcardDeck[];
   subjects: Subject[];
   topics: Topic[];
   studySessions: StudySession[];
@@ -36,6 +37,7 @@ export function useUserData() {
   const [projects, setProjects] = useState<Project[]>(cached?.projects ?? []);
   const [notes, setNotes] = useState<Note[]>(cached?.notes ?? []);
   const [flashcards, setFlashcards] = useState<Flashcard[]>(cached?.flashcards ?? []);
+  const [flashcardDecks, setFlashcardDecks] = useState<import('@/lib/supabase').FlashcardDeck[]>(cached?.flashcardDecks ?? []);
   const [events, setEvents] = useState<CalendarEvent[]>(cached?.events ?? []);
   const [loading, setLoading] = useState(!cacheIsFresh);
 
@@ -51,20 +53,22 @@ export function useUserData() {
       setProjects(recent.projects);
       setNotes(recent.notes);
       setFlashcards(recent.flashcards);
+      setFlashcardDecks(recent.flashcardDecks);
       setEvents(recent.events);
       setLoading(false);
       return;
     }
     if (showLoading) setLoading(true);
-    const [subs, tops, studies, revs, tsk, proj, nts, fcs, evs] = await Promise.all([
+    const [subs, tops, studies, revs, tsk, proj, nts, fcs, decks, evs] = await Promise.all([
       supabase.from('subjects').select('*').order('position'),
       supabase.from('topics').select('*').order('position'),
-      supabase.from('study_sessions').select('*, subject:subjects(*), topic:topics(*)').order('studied_date', { ascending: false }),
+      supabase.from('study_sessions').select('*, subject:subjects(*), topic:topics(*), session_subjects(subject_id, subject:subjects(*))').order('studied_date', { ascending: false }),
       supabase.from('revisions').select('*, topic:topics(*), subject:subjects(*)').order('next_due_date'),
       supabase.from('tasks').select('*, project:projects(*), subject:subjects(*), subtasks(*)').order('position'),
       supabase.from('projects').select('*').order('position'),
       supabase.from('notes').select('*, subject:subjects(*), topic:topics(*)').order('updated_at', { ascending: false }),
       supabase.from('flashcards').select('*, subject:subjects(*), topic:topics(*)').order('created_at', { ascending: false }),
+      supabase.from('flashcard_decks').select('*, subject:subjects(*), topic:topics(*)').order('created_at', { ascending: false }),
       supabase.from('calendar_events').select('*, subject:subjects(*)').order('start_date'),
     ]);
 
@@ -78,6 +82,7 @@ export function useUserData() {
       projects: (proj.data ?? []) as Project[],
       notes: (nts.data ?? []) as Note[],
       flashcards: (fcs.data ?? []) as Flashcard[],
+      flashcardDecks: (decks.data ?? []) as import('@/lib/supabase').FlashcardDeck[],
       events: (evs.data ?? []) as CalendarEvent[],
     };
     USER_DATA_CACHE.set(user.id, nextData);
@@ -89,6 +94,7 @@ export function useUserData() {
     setProjects(nextData.projects);
     setNotes(nextData.notes);
     setFlashcards(nextData.flashcards);
+    setFlashcardDecks(nextData.flashcardDecks);
     setEvents(nextData.events);
     setLoading(false);
   }, [user]);
@@ -133,9 +139,9 @@ export function useUserData() {
   };
 
   return {
-    subjects, topics, studySessions, revisions, tasks, projects, notes, flashcards, events,
+    subjects, topics, studySessions, revisions, tasks, projects, notes, flashcards, flashcardDecks, events,
     loading, refresh, getTopicTree,
-    setSubjects, setTopics, setStudySessions, setRevisions, setTasks, setProjects, setNotes, setFlashcards, setEvents,
+    setSubjects, setTopics, setStudySessions, setRevisions, setTasks, setProjects, setNotes, setFlashcards, setFlashcardDecks, setEvents,
   };
 }
 
