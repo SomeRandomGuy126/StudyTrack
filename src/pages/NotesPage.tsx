@@ -31,10 +31,10 @@ function safeNoteHtml(value: string) {
       const path = el.getAttribute('data-note-image') ?? '';
       const src = el.getAttribute('src') ?? '';
       const alt = el.getAttribute('alt') ?? 'Note image';
-      if (/^[a-f0-9-]{36}\\/(?:drafts|[a-f0-9-]{36})\\/[a-z0-9._-]+$/i.test(path)) {
+      if (/^[a-f0-9-]{36}\/(?:drafts|[a-f0-9-]{36})\/[a-z0-9._-]+$/i.test(path)) {
         return '<img data-note-image="' + escapeAttr(path) + '" alt="' + escapeAttr(alt) + '" />';
       }
-      if (/^data:image\\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
+      if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
         return '<img src="' + escapeAttr(src) + '" alt="' + escapeAttr(alt) + '" />';
       }
       return '';
