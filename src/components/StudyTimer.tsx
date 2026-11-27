@@ -82,7 +82,22 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('study_sessions').select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date,session_subjects(subject_id)').eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100).then(({ data }) => setResumeSessions((data ?? []) as ResumeSession[]));
+    const loadResumeSessions = async () => {
+      const withSubjects = await supabase.from('study_sessions')
+        .select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date,session_subjects(subject_id)')
+        .eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100);
+      if (!withSubjects.error) {
+        setResumeSessions((withSubjects.data ?? []) as ResumeSession[]);
+        return;
+      }
+      // Older databases do not have the optional multi-subject join table yet.
+      const legacy = await supabase.from('study_sessions')
+        .select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date')
+        .eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100);
+      if (legacy.error) console.error('Could not load resumable study sessions:', withSubjects.error, legacy.error);
+      setResumeSessions((legacy.data ?? []) as ResumeSession[]);
+    };
+    void loadResumeSessions();
   }, [user?.id]);
   const targetMs = Math.max(1, minutes) * 60_000;
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
@@ -166,13 +181,27 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       sessionId = result.data?.id ?? null;
     }
 
-    if (!error && sessionId) {
+    if (!error && sessionId && selectedSubjectIds.length > 0) {
       const clearResult = await supabase.from('session_subjects').delete().eq('session_id', sessionId);
-      error = clearResult.error;
-      if (!error && selectedSubjectIds.length > 0) {
+      const missingJoinTable = (result: { code?: string; message: string } | null) => Boolean(
+        result && (
+          result.code === '42P01' ||
+          result.code === 'PGRST200' ||
+          result.code === 'PGRST205' ||
+          /session_subjects.*(does not exist|not found|schema cache)|could not find.*session_subjects/i.test(result.message)
+        )
+      );
+      if (clearResult.error && !missingJoinTable(clearResult.error)) {
+        error = clearResult.error;
+      } else if (!clearResult.error) {
         const links = selectedSubjectIds.map((subject_id) => ({ session_id: sessionId, subject_id }));
         const linkResult = await supabase.from('session_subjects').insert(links);
-        error = linkResult.error;
+        if (linkResult.error && !missingJoinTable(linkResult.error)) error = linkResult.error;
+        if (linkResult.error && missingJoinTable(linkResult.error)) {
+          console.warn('Session saved with its primary subject; multi-subject support needs the latest database migration.');
+        }
+      } else {
+        console.warn('Session saved with its primary subject; multi-subject support needs the latest database migration.');
       }
     }
 
