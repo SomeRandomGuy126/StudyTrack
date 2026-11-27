@@ -6,7 +6,7 @@ import { Play, Pause, RotateCcw, Save, Timer as TimerIcon, Hourglass, Minus, Max
 
 type Props = { subjects: Subject[]; topics: Topic[]; onSaved: () => void };
 type Mode = 'stopwatch' | 'countdown';
-type ResumeSession = { id: string; title: string; subject_id: string; topic_id: string | null; duration_minutes: number; confidence: number; session_type: 'lesson' | 'revision' | 'uncategorised'; studied_date: string };
+type ResumeSession = { id: string; title: string; subject_id: string | null; topic_id: string | null; duration_minutes: number; confidence: number; session_type: 'lesson' | 'revision' | 'uncategorised'; studied_date: string; session_subjects?: { subject_id: string }[] };
 
 function formatClock(ms: number) {
   const total = Math.max(0, Math.floor(ms / 1000));
@@ -58,7 +58,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
   });
   const [mode, setMode] = useState<Mode>(savedState.mode ?? 'stopwatch');
   const [minutes, setMinutes] = useState<number>(savedState.minutes ?? 60);
-  const [subjectId, setSubjectId] = useState<string>(savedState.subjectId ?? subjects[0]?.id ?? '');
+  const [selectedSubjectIds, setSelectedSubjectIds] = useState<string[]>(() => Array.isArray(savedState.subjectIds) ? savedState.subjectIds : savedState.subjectId ? [savedState.subjectId] : (subjects[0]?.id ? [subjects[0].id] : []));
   const [topicId, setTopicId] = useState<string>(savedState.topicId ?? '');
   const [title, setTitle] = useState<string>(savedState.title ?? '');
   const [confidence, setConfidence] = useState<number>(savedState.confidence ?? 3);
@@ -76,18 +76,18 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
 
   useEffect(() => {
     window.localStorage.setItem(storageKey, JSON.stringify({
-      mode, minutes, subjectId, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized,
+      mode, minutes, selectedSubjectIds, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized,
     }));
-  }, [storageKey, mode, minutes, subjectId, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized]);
+  }, [storageKey, mode, minutes, selectedSubjectIds, topicId, title, confidence, sessionType, resumeSessionId, elapsedMs, startedAt, running, finished, minimized]);
 
   useEffect(() => {
     if (!user) return;
-    supabase.from('study_sessions').select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date').eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100).then(({ data }) => setResumeSessions((data ?? []) as ResumeSession[]));
+    supabase.from('study_sessions').select('id,title,subject_id,topic_id,duration_minutes,confidence,session_type,studied_date,session_subjects(subject_id)').eq('user_id', user.id).order('studied_date', { ascending: false }).limit(100).then(({ data }) => setResumeSessions((data ?? []) as ResumeSession[]));
   }, [user?.id]);
   const targetMs = Math.max(1, minutes) * 60_000;
   const actualMs = elapsedMs + (running && startedAt !== null ? now - startedAt : 0);
   const shownMs = mode === 'countdown' ? Math.max(0, targetMs - actualMs) : actualMs;
-  const subjectTopics = useMemo(() => topics.filter((topic) => topic.subject_id === subjectId), [topics, subjectId]);
+  const subjectTopics = useMemo(() => selectedSubjectIds.length === 1 ? topics.filter((topic) => topic.subject_id === selectedSubjectIds[0]) : [], [topics, selectedSubjectIds]);
 
   useEffect(() => {
     if (!running || startedAt === null) return;
@@ -106,7 +106,6 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
   }, [running, startedAt, elapsedMs, mode, targetMs]);
 
   const start = () => {
-    if (!subjectId) return;
     setStartedAt(Date.now());
     setNow(Date.now());
     setRunning(true);
@@ -127,7 +126,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
   };
 
   const save = async () => {
-    if (!user || !subjectId) return;
+    if (!user) return;
     const duration = Math.floor(actualMs / 60_000);
     if (duration < 1) return;
     setSaving(true);
@@ -135,7 +134,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
     const selectedTopic = topics.find((topic) => topic.id === topicId);
     const sessionPayload = {
       user_id: user.id,
-      subject_id: subjectId,
+      subject_id: selectedSubjectIds[0] ?? null,
       topic_id: topicId || null,
       title: title.trim() || selectedTopic?.name || 'Study session',
       description: mode === 'countdown' ? `Countdown target: ${minutes} minutes` : 'Stopwatch session',
@@ -147,36 +146,52 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       tracking_method: 'timer',
     };
 
-    let { error } = resumeSessionId
-      ? await supabase.from('study_sessions').update({ duration_minutes: duration, confidence, title: sessionPayload.title, description: sessionPayload.description, session_type: sessionType }).eq('id', resumeSessionId).eq('user_id', user.id)
-      : await supabase.from('study_sessions').insert(sessionPayload);
+    let sessionId = resumeSessionId;
+    let error: { message: string; code?: string } | null = null;
 
-    // Older databases may not have the optional tracking_method column yet.
-    // Retry without it so a schema migration gap cannot block saving study time.
-    if (
-      error &&
-      (error.code === '42703' || error.code === 'PGRST204') &&
-      error.message.toLowerCase().includes('tracking_method')
-    ) {
-      const legacyPayload = Object.fromEntries(
-        Object.entries(sessionPayload).filter(([key]) => key !== 'tracking_method')
-      );
-      const retry = await supabase.from('study_sessions').insert(legacyPayload);
-      error = retry.error;
+    if (resumeSessionId) {
+      const result = await supabase.from('study_sessions').update({
+        duration_minutes: duration,
+        confidence,
+        title: sessionPayload.title,
+        description: sessionPayload.description,
+        session_type: sessionType,
+        subject_id: sessionPayload.subject_id,
+        topic_id: sessionPayload.topic_id,
+      }).eq('id', resumeSessionId).eq('user_id', user.id);
+      error = result.error;
+    } else {
+      const result = await supabase.from('study_sessions').insert(sessionPayload).select('id').single();
+      error = result.error;
+      sessionId = result.data?.id ?? null;
+    }
+
+    if (!error && sessionId) {
+      const clearResult = await supabase.from('session_subjects').delete().eq('session_id', sessionId);
+      error = clearResult.error;
+      if (!error && selectedSubjectIds.length > 0) {
+        const links = selectedSubjectIds.map((subject_id) => ({ session_id: sessionId, subject_id }));
+        const linkResult = await supabase.from('session_subjects').insert(links);
+        error = linkResult.error;
+      }
     }
 
     setSaving(false);
     if (error) {
       console.error('Failed to save study session:', error);
-      const missingTypeColumn = error.message.toLowerCase().includes('session_type');
-      setSaveError(missingTypeColumn
-        ? 'Session categories are not enabled in your database yet. Apply supabase/migrations/20261125180000_add_study_session_types_and_activity.sql in Supabase, then reload StudyTrack.'
+      const missingFeature = error.message.toLowerCase().includes('session_type') ||
+        error.message.toLowerCase().includes('session_subjects') ||
+        error.message.toLowerCase().includes('subject_id');
+      setSaveError(missingFeature
+        ? 'The connected StudyTrack database is missing a required update. The app needs its latest StudyTrack database migration deployed to the same Supabase project.'
         : `Could not save this study session: ${error.message}`);
       return;
     }
     reset();
     setTitle('');
     setResumeSessionId(null);
+    setSelectedSubjectIds([]);
+    setTopicId('');
     setElapsedMs(0);
     setSessionType('uncategorised');
     onSaved();
@@ -189,7 +204,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       <div className="flex items-center justify-between gap-2 mb-3 select-none">
         <div className="flex min-w-0 flex-wrap items-center gap-2 text-sm font-semibold text-primary"><TimerIcon size={15} /><span>Timer {timerNumber}</span><span className="font-mono text-brand-500 tabular-nums">{formatClock(shownMs)}</span></div>
         <div className="flex items-center gap-1">
-          {minimized && !running && !finished && <button type="button" className="btn-ghost btn !p-1.5" title={elapsedMs > 0 ? "Resume" : "Start"} disabled={!subjectId} onClick={start}><Play size={15} /></button>}
+          {minimized && !running && !finished && <button type="button" className="btn-ghost btn !p-1.5" title={elapsedMs > 0 ? "Resume" : "Start"} onClick={start}><Play size={15} /></button>}
           {minimized && running && <button type="button" className="btn-ghost btn !p-1.5" title="Pause" onClick={pause}><Pause size={15} /></button>}
           <button type="button" className="btn btn-secondary !px-2.5 !py-1.5 text-xs shrink-0" aria-label={minimized ? "Expand timer" : "Minimise timer"} title={minimized ? "Expand timer" : "Minimise timer"} onClick={() => setMinimized(!minimized)}>{minimized ? <Maximize2 size={14} /> : <Minus size={14} />}{minimized ? "Expand" : "Minimise"}</button>
           {canRemove && !running && elapsedMs === 0 && <button type="button" className="btn-ghost btn !p-1.5 text-red-500" title="Remove empty timer" onClick={onRemove}><Trash2 size={15} /></button>}
@@ -215,28 +230,39 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4 min-w-0">
-        <label className="text-sm text-secondary">Subject
-          <select className="input mt-1" value={subjectId} disabled={disabledSettings} onChange={(e) => { setSubjectId(e.target.value); setTopicId(''); }}>
-            {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
-          </select>
-        </label>
+        <fieldset className="text-sm text-secondary sm:col-span-2">
+          <legend className="mb-2">Subjects <span className="text-tertiary">(optional, select more than one for mixed study)</span></legend>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {subjects.map((subject) => (
+              <label key={subject.id} className="flex items-center gap-2 rounded-lg surface-tertiary px-3 py-2">
+                <input type="checkbox" checked={selectedSubjectIds.includes(subject.id)} disabled={disabledSettings} onChange={(event) => {
+                  setSelectedSubjectIds((current) => event.target.checked ? [...current, subject.id] : current.filter((id) => id !== subject.id));
+                  setTopicId('');
+                }} />
+                <span>{subject.name}</span>
+              </label>
+            ))}
+          </div>
+          {selectedSubjectIds.length === 0 && <p className="text-xs text-tertiary mt-1">No subject selected. This session will still be saved.</p>}
+          {selectedSubjectIds.length > 1 && <p className="text-xs text-tertiary mt-1">A specific topic can only be selected when one subject is chosen.</p>}
+        </fieldset>
         <label className="text-sm text-secondary">Continue a previous session
           <select className="input mt-1" value={resumeSessionId ?? ''} disabled={disabledSettings} onChange={(e) => {
             const selected = resumeSessions.find((item) => item.id === e.target.value);
             setResumeSessionId(selected?.id ?? null);
-            if (selected) { setSubjectId(selected.subject_id); setTopicId(selected.topic_id ?? ''); setTitle(selected.title); setConfidence(selected.confidence); setSessionType(selected.session_type ?? 'uncategorised'); setElapsedMs(selected.duration_minutes * 60_000); setMode('stopwatch'); setFinished(false); }
+            if (selected) { setSelectedSubjectIds(selected.session_subjects?.map((item) => item.subject_id) ?? (selected.subject_id ? [selected.subject_id] : [])); setTopicId(selected.topic_id ?? ''); setTitle(selected.title); setConfidence(selected.confidence); setSessionType(selected.session_type ?? 'uncategorised'); setElapsedMs(selected.duration_minutes * 60_000); setMode('stopwatch'); setFinished(false); }
             else { setElapsedMs(0); }
           }}>
             <option value="">Start a new session</option>
             {resumeSessions.map((item) => <option key={item.id} value={item.id}>{item.title} · {item.duration_minutes}m · {item.studied_date}</option>)}
           </select>
         </label>
-        <label className="text-sm text-secondary">Topic
+        {selectedSubjectIds.length === 1 && <label className="text-sm text-secondary">Topic
           <select className="input mt-1" value={topicId} disabled={disabledSettings} onChange={(e) => setTopicId(e.target.value)}>
             <option value="">No specific topic</option>
             {subjectTopics.map((topic) => <option key={topic.id} value={topic.id}>{topic.name}</option>)}
           </select>
-        </label>
+        </label>}
         <label className="text-sm text-secondary sm:col-span-2">Session name (optional)
           <input className="input mt-1" value={title} disabled={disabledSettings} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Cell recognition and antigens" />
         </label>
@@ -261,7 +287,7 @@ function TimerInstance({ subjects, topics, onSaved, timerNumber, timerId, onRemo
         {mode === 'countdown' && <p className="text-xs text-tertiary mt-2">{formatClock(actualMs)} studied so far</p>}
         <div className="flex flex-wrap justify-center gap-2 mt-5">
           {!running && !finished && (
-            <button type="button" onClick={start} disabled={!subjectId} className="btn btn-primary"><Play size={16} /> {elapsedMs > 0 ? 'Resume' : 'Start'}</button>
+            <button type="button" onClick={start} className="btn btn-primary"><Play size={16} /> {elapsedMs > 0 ? 'Resume' : 'Start'}</button>
           )}
           {running && <button type="button" onClick={pause} className="btn btn-secondary"><Pause size={16} /> Pause</button>}
           {(elapsedMs > 0 || finished) && !running && <button type="button" onClick={reset} className="btn btn-secondary"><RotateCcw size={16} /> Reset</button>}
