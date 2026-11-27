@@ -251,11 +251,13 @@ function StudyMode({ cards, onClose, onComplete }: { cards: Flashcard[]; onClose
   );
 }
 
-function FlashcardModal({ card, subjects, topics, userId, onClose, onSaved }: {
+function FlashcardModal({ card, subjects, topics, decks, userId, defaultDeckId, onClose, onSaved }: {
   card: Flashcard | null;
-  subjects: any[];
+  subjects: Subject[];
   topics: any[];
+  decks: FlashcardDeck[];
   userId: string;
+  defaultDeckId: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -263,6 +265,7 @@ function FlashcardModal({ card, subjects, topics, userId, onClose, onSaved }: {
   const [back, setBack] = useState(card?.back ?? '');
   const [subjectId, setSubjectId] = useState(card?.subject_id ?? '');
   const [topicId, setTopicId] = useState(card?.topic_id ?? '');
+  const [deckId, setDeckId] = useState(card?.deck_id ?? defaultDeckId ?? '');
   const [confidence, setConfidence] = useState(card?.confidence ?? 3);
   const [saving, setSaving] = useState(false);
 
@@ -270,7 +273,7 @@ function FlashcardModal({ card, subjects, topics, userId, onClose, onSaved }: {
 
   const handleSave = async () => {
     setSaving(true);
-    const payload = { front, back, subject_id: subjectId || null, topic_id: topicId || null, confidence };
+    const payload = { front, back, subject_id: subjectId || null, topic_id: topicId || null, deck_id: deckId || null, confidence };
     if (card) {
       await supabase.from('flashcards').update(payload).eq('id', card.id);
     } else {
@@ -308,6 +311,13 @@ function FlashcardModal({ card, subjects, topics, userId, onClose, onSaved }: {
           </div>
         </div>
         <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Deck</label>
+          <select className="input" value={deckId} onChange={(e) => setDeckId(e.target.value)}>
+            <option value="">Unsorted</option>
+            {decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+          </select>
+        </div>
+        <div>
           <label className="block text-sm font-medium text-secondary mb-2">Confidence</label>
           <ConfidenceDots value={confidence} onChange={setConfidence} size={24} />
         </div>
@@ -323,16 +333,19 @@ function FlashcardModal({ card, subjects, topics, userId, onClose, onSaved }: {
 }
 
 
-function AIGenerateModal({ notes, subjects, topics, userId, onClose, onSaved }: {
+function AIGenerateModal({ notes, subjects, topics, decks, userId, defaultDeckId, onClose, onSaved }: {
   notes: any[];
-  subjects: any[];
+  subjects: Subject[];
   topics: any[];
+  decks: FlashcardDeck[];
   userId: string;
+  defaultDeckId: string | null;
   onClose: () => void;
   onSaved: () => void;
 }) {
   const [selectedNoteId, setSelectedNoteId] = useState('');
   const [subjectId, setSubjectId] = useState('');
+  const [deckId, setDeckId] = useState(defaultDeckId ?? '');
   const [count, setCount] = useState(5);
   const [generated, setGenerated] = useState<{ front: string; back: string }[]>([]);
   const [loading, setLoading] = useState(false);
@@ -382,6 +395,7 @@ function AIGenerateModal({ notes, subjects, topics, userId, onClose, onSaved }: 
       const rows = generated.map((card) => ({
         user_id: userId,
         subject_id: subjectId || null,
+        deck_id: deckId || null,
         front: card.front,
         back: card.back,
         confidence: 3,
@@ -447,6 +461,13 @@ function AIGenerateModal({ notes, subjects, topics, userId, onClose, onSaved }: 
             </select>
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-secondary mb-1.5">Save into deck</label>
+            <select className="input" value={deckId} onChange={(e) => setDeckId(e.target.value)}>
+              <option value="">Unsorted</option>
+              {decks.map((deck) => <option key={deck.id} value={deck.id}>{deck.name}</option>)}
+            </select>
+          </div>
           <div>
             <label className="block text-sm font-medium text-secondary mb-1.5">
               Number of cards
@@ -533,3 +554,56 @@ function AIGenerateModal({ notes, subjects, topics, userId, onClose, onSaved }: 
     </Modal>
   );
 }
+
+function DeckModal({ userId, subjects, onClose, onSaved }: {
+  userId: string;
+  subjects: Subject[];
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState('');
+  const [subjectId, setSubjectId] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const createDeck = async () => {
+    if (!name.trim()) return;
+    setSaving(true);
+    setError('');
+    const { error: insertError } = await supabase.from('flashcard_decks').insert({
+      user_id: userId,
+      name: name.trim(),
+      subject_id: subjectId || null,
+    });
+    setSaving(false);
+    if (insertError) {
+      setError('Could not create deck: ' + insertError.message);
+      return;
+    }
+    onSaved();
+  };
+
+  return (
+    <Modal open onClose={onClose} title="Create a flashcard deck" size="sm">
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Deck name</label>
+          <input className="input" autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Topic 2: Cells" />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-secondary mb-1.5">Subject (optional)</label>
+          <select className="input" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+            <option value="">Mixed subjects</option>
+            {subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+          </select>
+        </div>
+        {error && <p role="alert" className="text-sm text-red-500">{error}</p>}
+        <div className="flex justify-end gap-2">
+          <button onClick={onClose} className="btn btn-secondary">Cancel</button>
+          <button onClick={createDeck} disabled={saving || !name.trim()} className="btn btn-primary disabled:opacity-50">{saving ? 'Creating…' : 'Create deck'}</button>
+        </div>
+      </div>
+    </Modal>
+  );
+}
+
