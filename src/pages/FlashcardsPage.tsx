@@ -5,16 +5,17 @@ import { useAuth } from '@/contexts/AuthContext';
 import { generateFlashcards } from '@/lib/aiClient';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { EmptyState, Spinner, ConfidenceDots, ProgressBar, Badge } from '@/components/ui/Common';
-import type { Flashcard } from '@/lib/supabase';
+import type { Flashcard, FlashcardDeck, Subject } from '@/lib/supabase';
 import {
   Layers, Plus, Edit2, Trash2, Search, Shuffle, ChevronLeft, ChevronRight,
-  Check, X, Sparkles, Brain, RotateCcw
+  Check, X, Sparkles, Brain, RotateCcw, FolderPlus, ArrowLeft
 } from 'lucide-react';
 
 export function FlashcardsPage() {
   const data = useUserData();
   const { user } = useAuth();
   const [showModal, setShowModal] = useState(false);
+  const [showDeckModal, setShowDeckModal] = useState(false);
   const [editing, setEditing] = useState<Flashcard | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState('');
@@ -22,14 +23,19 @@ export function FlashcardsPage() {
   const [studyMode, setStudyMode] = useState(false);
   const [studyCards, setStudyCards] = useState<Flashcard[]>([]);
   const [showAIGen, setShowAIGen] = useState(false);
+  const [selectedDeckId, setSelectedDeckId] = useState<string | null>(null);
 
+  const selectedDeck = data.flashcardDecks.find((deck) => deck.id === selectedDeckId) ?? null;
+  const isUnsortedView = selectedDeckId === '__unsorted__';
   const filtered = useMemo(() => {
-    return data.flashcards.filter((c) => {
-      if (filterSubject !== 'all' && c.subject_id !== filterSubject) return false;
-      if (search && !c.front.toLowerCase().includes(search.toLowerCase()) && !c.back.toLowerCase().includes(search.toLowerCase())) return false;
+    return data.flashcards.filter((card) => {
+      if (selectedDeckId === null) return false;
+      if (isUnsortedView ? card.deck_id !== null : card.deck_id !== selectedDeckId) return false;
+      if (filterSubject !== 'all' && card.subject_id !== filterSubject) return false;
+      if (search && !card.front.toLowerCase().includes(search.toLowerCase()) && !card.back.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [data.flashcards, search, filterSubject]);
+  }, [data.flashcards, search, filterSubject, selectedDeckId, isUnsortedView]);
 
   if (data.loading) {
     return <div className="flex items-center justify-center py-20"><Spinner size={32} className="text-brand-500" /></div>;
@@ -37,7 +43,8 @@ export function FlashcardsPage() {
 
   const handleDelete = async () => {
     if (!deleteId) return;
-    await supabase.from('flashcards').delete().eq('id', deleteId);
+    const { error } = await supabase.from('flashcards').delete().eq('id', deleteId);
+    if (error) console.error('Could not delete flashcard:', error);
     setDeleteId(null);
     data.refresh();
   };
@@ -50,141 +57,123 @@ export function FlashcardsPage() {
     setStudyMode(true);
   };
 
+  const unsortedCount = data.flashcards.filter((card) => !card.deck_id).length;
+  const isDeckView = selectedDeckId !== null;
+
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-primary">Flashcards</h1>
-          <p className="text-secondary text-sm mt-1">Create flashcards and study with active recall</p>
+          {isDeckView && (
+            <button type="button" onClick={() => { setSelectedDeckId(null); setSearch(''); setFilterSubject('all'); }} className="btn btn-ghost !px-0 !py-1 mb-2 text-sm">
+              <ArrowLeft size={15} /> All decks
+            </button>
+          )}
+          <h1 className="text-2xl font-bold text-primary">{isDeckView ? (selectedDeck?.name ?? 'Unsorted cards') : 'Flashcards'}</h1>
+          <p className="text-secondary text-sm mt-1">{isDeckView ? `${filtered.length} cards in this deck` : 'Organise your cards into decks, then practise active recall'}</p>
         </div>
-        <div className="flex gap-2">
-          <button onClick={() => setShowAIGen(true)} className="btn btn-secondary">
-            <Sparkles size={16} /> AI generate
-          </button>
-          <button onClick={() => { setEditing(null); setShowModal(true); }} className="btn btn-primary">
-            <Plus size={16} /> New card
-          </button>
+        <div className="flex flex-wrap gap-2">
+          {!isDeckView && <button onClick={() => setShowDeckModal(true)} className="btn btn-secondary"><FolderPlus size={16} /> New deck</button>}
+          {isDeckView && <>
+            <button onClick={() => setShowAIGen(true)} className="btn btn-secondary"><Sparkles size={16} /> AI generate</button>
+            <button onClick={() => { setEditing(null); setShowModal(true); }} className="btn btn-primary"><Plus size={16} /> New card</button>
+          </>}
         </div>
       </div>
 
-      {/* Stats */}
-      {data.flashcards.length > 0 && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <div className="card p-4">
-            <p className="text-2xl font-bold text-primary">{data.flashcards.length}</p>
-            <p className="text-xs text-tertiary mt-1">Total cards</p>
+      {!isDeckView ? (
+        <>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="card p-4"><p className="text-2xl font-bold text-primary">{data.flashcards.length}</p><p className="text-xs text-tertiary mt-1">Total cards</p></div>
+            <div className="card p-4"><p className="text-2xl font-bold text-primary">{data.flashcards.reduce((sum, card) => sum + card.times_reviewed, 0)}</p><p className="text-xs text-tertiary mt-1">Total reviews</p></div>
+            <div className="card p-4"><p className="text-2xl font-bold text-primary">{Math.round(data.flashcards.reduce((sum, card) => sum + (card.times_reviewed > 0 ? card.times_correct / card.times_reviewed : 0), 0) / Math.max(1, data.flashcards.length) * 100)}%</p><p className="text-xs text-tertiary mt-1">Average accuracy</p></div>
+            <div className="card p-4"><p className="text-2xl font-bold text-primary">{data.flashcardDecks.length}</p><p className="text-xs text-tertiary mt-1">Decks</p></div>
           </div>
-          <div className="card p-4">
-            <p className="text-2xl font-bold text-primary">{data.flashcards.reduce((sum, c) => sum + c.times_reviewed, 0)}</p>
-            <p className="text-xs text-tertiary mt-1">Total reviews</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-2xl font-bold text-primary">
-              {Math.round(data.flashcards.reduce((sum, c) => sum + (c.times_reviewed > 0 ? c.times_correct / c.times_reviewed : 0), 0) / Math.max(1, data.flashcards.length) * 100)}%
-            </p>
-            <p className="text-xs text-tertiary mt-1">Avg accuracy</p>
-          </div>
-          <div className="card p-4">
-            <p className="text-2xl font-bold text-primary">{data.subjects.filter((s) => data.flashcards.some((c) => c.subject_id === s.id)).length}</p>
-            <p className="text-xs text-tertiary mt-1">Subjects</p>
-          </div>
-        </div>
-      )}
-
-      {/* Controls */}
-      {data.flashcards.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-3 mb-4">
-          <div className="flex-1 relative">
-            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" />
-            <input className="input pl-10" placeholder="Search flashcards..." value={search} onChange={(e) => setSearch(e.target.value)} />
-          </div>
-          <select className="input sm:w-48" value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
-            <option value="all">All subjects</option>
-            {data.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <button onClick={() => startStudy(false)} disabled={filtered.length === 0} className="btn btn-secondary disabled:opacity-50">
-            <Brain size={16} /> Study
-          </button>
-          <button onClick={() => startStudy(true)} disabled={filtered.length === 0} className="btn btn-secondary disabled:opacity-50">
-            <Shuffle size={16} /> Shuffle
-          </button>
-        </div>
-      )}
-
-      {filtered.length === 0 ? (
-        <div className="card">
-          <EmptyState
-            icon={<Layers size={48} />}
-            title="No flashcards yet"
-            description="Create flashcards manually or generate them from your notes with AI."
-            action={<button onClick={() => setShowModal(true)} className="btn btn-primary"><Plus size={16} /> New card</button>}
-          />
-        </div>
-      ) : (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filtered.map((card) => (
-            <div key={card.id} className="card p-4 group hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-2">
-                  {card.subject && (
-                    <div className="flex items-center gap-1.5">
-                      <div className="w-2 h-2 rounded-full" style={{ backgroundColor: card.subject.color }} />
-                      <span className="text-xs text-tertiary">{card.subject.name}</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => { setEditing(card); setShowModal(true); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
-                  <button onClick={() => setDeleteId(card.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
-                </div>
-              </div>
-              <p className="text-sm font-medium text-primary mb-2 line-clamp-3">{card.front}</p>
-              <div className="border-t border-app pt-2">
-                <p className="text-xs text-secondary line-clamp-2">{card.back}</p>
-              </div>
-              <div className="flex items-center justify-between mt-3">
-                <ConfidenceDots value={card.confidence} size={10} />
-                <span className="text-xs text-tertiary">{card.times_reviewed} reviews</span>
-              </div>
+          {data.flashcardDecks.length === 0 && unsortedCount === 0 ? (
+            <div className="card">
+              <EmptyState icon={<Layers size={48} />} title="Your flashcard library is empty" description="Create a deck to organise your cards, or make a card and add it to a deck later." action={<button onClick={() => setShowDeckModal(true)} className="btn btn-primary"><FolderPlus size={16} /> Create your first deck</button>} />
             </div>
-          ))}
-        </div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {data.flashcardDecks.map((deck) => {
+                const count = data.flashcards.filter((card) => card.deck_id === deck.id).length;
+                return (
+                  <button key={deck.id} type="button" onClick={() => setSelectedDeckId(deck.id)} className="card p-5 text-left hover:shadow-md transition-shadow group">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="w-11 h-11 rounded-xl surface-tertiary flex items-center justify-center text-brand-500"><Layers size={22} /></div>
+                      <span className="badge">{count} cards</span>
+                    </div>
+                    <h2 className="font-semibold text-primary mt-4">{deck.name}</h2>
+                    <p className="text-xs text-tertiary mt-1">{deck.subject?.name ?? 'Mixed subjects'}</p>
+                    <div className="flex justify-between items-center mt-4 text-sm text-brand-500"><span>Open deck</span><ChevronRight size={16} /></div>
+                  </button>
+                );
+              })}
+              {unsortedCount > 0 && (
+                <button type="button" onClick={() => setSelectedDeckId('__unsorted__')} className="card p-5 text-left hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between gap-3"><div className="w-11 h-11 rounded-xl surface-tertiary flex items-center justify-center text-secondary"><Layers size={22} /></div><span className="badge">{unsortedCount} cards</span></div>
+                  <h2 className="font-semibold text-primary mt-4">Unsorted cards</h2>
+                  <p className="text-xs text-tertiary mt-1">Cards not assigned to a deck yet</p>
+                  <div className="flex justify-between items-center mt-4 text-sm text-brand-500"><span>Organise cards</span><ChevronRight size={16} /></div>
+                </button>
+              )}
+            </div>
+          )}
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button onClick={() => { setEditing(null); setShowModal(true); }} className="btn btn-secondary"><Plus size={16} /> Add an unsorted card</button>
+          </div>
+        </>
+      ) : (
+        <>
+          {selectedDeck?.subject && <p className="text-sm text-secondary mb-3">Subject: {selectedDeck.subject.name}</p>}
+          <div className="flex flex-col sm:flex-row gap-3 mb-4">
+            <div className="flex-1 relative"><Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-tertiary" /><input className="input pl-10" placeholder="Search cards in this deck..." value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+            <select className="input sm:w-48" value={filterSubject} onChange={(e) => setFilterSubject(e.target.value)}>
+              <option value="all">All subjects</option>{data.subjects.map((subject) => <option key={subject.id} value={subject.id}>{subject.name}</option>)}
+            </select>
+            <button onClick={() => startStudy(false)} disabled={filtered.length === 0} className="btn btn-secondary disabled:opacity-50"><Brain size={16} /> Study</button>
+            <button onClick={() => startStudy(true)} disabled={filtered.length === 0} className="btn btn-secondary disabled:opacity-50"><Shuffle size={16} /> Shuffle</button>
+          </div>
+          {filtered.length === 0 ? (
+            <div className="card"><EmptyState icon={<Layers size={48} />} title="No cards in this deck yet" description="Add cards manually or generate them from one of your notes." action={<button onClick={() => { setEditing(null); setShowModal(true); }} className="btn btn-primary"><Plus size={16} /> Add a card</button>} /></div>
+          ) : (
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {filtered.map((card) => (
+                <div key={card.id} className="card p-4 group hover:shadow-md transition-shadow">
+                  <div className="flex items-start justify-between mb-3 gap-2">
+                    <div className="flex items-center gap-2 min-w-0">{card.subject && <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full" style={{ backgroundColor: card.subject.color }} /><span className="text-xs text-tertiary">{card.subject.name}</span></div>}</div>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => { setEditing(card); setShowModal(true); }} className="btn-ghost btn !p-1"><Edit2 size={14} /></button>
+                      <button onClick={() => setDeleteId(card.id)} className="btn-ghost btn !p-1 text-red-500"><Trash2 size={14} /></button>
+                    </div>
+                  </div>
+                  <p className="text-sm font-medium text-primary mb-2 line-clamp-3">{card.front}</p>
+                  <div className="border-t border-app pt-2"><p className="text-xs text-secondary line-clamp-2">{card.back}</p></div>
+                  <div className="flex items-center justify-between mt-3"><ConfidenceDots value={card.confidence} size={10} /><span className="text-xs text-tertiary">{card.times_reviewed} reviews</span></div>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
 
-      {showModal && (
-        <FlashcardModal
-          card={editing}
-          subjects={data.subjects}
-          topics={data.topics}
-          userId={user!.id}
-          onClose={() => setShowModal(false)}
-          onSaved={() => { setShowModal(false); data.refresh(); }}
-        />
+      {showModal && user && (
+        <FlashcardModal card={editing} subjects={data.subjects} topics={data.topics} decks={data.flashcardDecks} userId={user.id}
+          defaultDeckId={selectedDeckId && selectedDeckId !== '__unsorted__' ? selectedDeckId : null}
+          onClose={() => setShowModal(false)} onSaved={() => { setShowModal(false); data.refresh(); }} />
       )}
 
-      {showAIGen && (
-        <AIGenerateModal
-          notes={data.notes}
-          subjects={data.subjects}
-          topics={data.topics}
-          userId={user!.id}
-          onClose={() => setShowAIGen(false)}
-          onSaved={() => { setShowAIGen(false); data.refresh(); }}
-        />
+      {showDeckModal && user && <DeckModal userId={user.id} subjects={data.subjects} onClose={() => setShowDeckModal(false)} onSaved={() => { setShowDeckModal(false); data.refresh(); }} />}
+
+      {showAIGen && user && (
+        <AIGenerateModal notes={data.notes} subjects={data.subjects} topics={data.topics} decks={data.flashcardDecks} userId={user.id}
+          defaultDeckId={selectedDeckId && selectedDeckId !== '__unsorted__' ? selectedDeckId : null}
+          onClose={() => setShowAIGen(false)} onSaved={() => { setShowAIGen(false); data.refresh(); }} />
       )}
 
-      {studyMode && studyCards.length > 0 && (
-        <StudyMode cards={studyCards} onClose={() => setStudyMode(false)} onComplete={() => { data.refresh(); }} />
-      )}
+      {studyMode && studyCards.length > 0 && <StudyMode cards={studyCards} onClose={() => setStudyMode(false)} onComplete={() => { data.refresh(); }} />}
 
-      <ConfirmDialog
-        open={!!deleteId}
-        onClose={() => setDeleteId(null)}
-        onConfirm={handleDelete}
-        title="Delete flashcard"
-        message="Are you sure you want to delete this flashcard?"
-        confirmLabel="Delete"
-      />
+      <ConfirmDialog open={!!deleteId} onClose={() => setDeleteId(null)} onConfirm={handleDelete} title="Delete flashcard" message="Are you sure you want to delete this flashcard?" confirmLabel="Delete" />
     </div>
   );
 }
@@ -193,77 +182,70 @@ function StudyMode({ cards, onClose, onComplete }: { cards: Flashcard[]; onClose
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
   const [results, setResults] = useState<Record<string, 'correct' | 'incorrect'>>({});
-
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   const card = cards[index];
-  const isLast = index === cards.length - 1;
+  const correctCount = Object.values(results).filter((result) => result === 'correct').length;
+  const answeredCount = Object.keys(results).length;
+  const selectedResult = results[card.id];
 
-  const handleAnswer = async (correct: boolean) => {
-    setResults({ ...results, [card.id]: correct ? 'correct' : 'incorrect' });
-    await supabase.from('flashcards').update({
-      times_reviewed: card.times_reviewed + 1,
-      times_correct: card.times_correct + (correct ? 1 : 0),
-      confidence: Math.min(5, Math.max(1, card.confidence + (correct ? 1 : -1))),
-    }).eq('id', card.id);
-
-    if (isLast) {
-      onComplete();
-      onClose();
-    } else {
-      setIndex(index + 1);
-      setFlipped(false);
-    }
+  const moveTo = (nextIndex: number) => {
+    setIndex(Math.max(0, Math.min(cards.length - 1, nextIndex)));
+    setFlipped(false);
+    setError('');
   };
 
-  const correctCount = Object.values(results).filter((r) => r === 'correct').length;
+  const finish = async () => {
+    if (saving) return;
+    setSaving(true);
+    setError('');
+    const updates = cards.filter((item) => results[item.id]).map((item) => {
+      const correct = results[item.id] === 'correct';
+      return supabase.from('flashcards').update({
+        times_reviewed: item.times_reviewed + 1,
+        times_correct: item.times_correct + (correct ? 1 : 0),
+        confidence: Math.min(5, Math.max(1, item.confidence + (correct ? 1 : -1))),
+      }).eq('id', item.id);
+    });
+    const outcomes = await Promise.all(updates);
+    const failed = outcomes.find((outcome) => outcome.error);
+    setSaving(false);
+    if (failed?.error) {
+      setError('Could not save your review: ' + failed.error.message);
+      return;
+    }
+    onComplete();
+    onClose();
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: 'var(--bg-primary)' }}>
       <div className="w-full max-w-2xl">
-        <div className="flex items-center justify-between mb-6">
-          <span className="text-sm text-secondary">Card {index + 1} of {cards.length}</span>
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-secondary">{correctCount} correct</span>
-            <button onClick={onClose} className="btn-ghost btn !p-2"><X size={18} /></button>
-          </div>
+        <div className="flex items-center justify-between mb-6 gap-3">
+          <div><span className="text-sm text-secondary">Card {index + 1} of {cards.length}</span><p className="text-xs text-tertiary mt-1">{answeredCount} answered · {correctCount} knew it</p></div>
+          <button onClick={onClose} className="btn-ghost btn !p-2" aria-label="Close study session"><X size={18} /></button>
         </div>
-
         <ProgressBar value={index + 1} max={cards.length} className="mb-6" />
-
-        <div
-          className="card p-8 min-h-[300px] flex items-center justify-center cursor-pointer text-center mb-6"
-          onClick={() => setFlipped(!flipped)}
-        >
+        <button type="button" className="card p-8 min-h-[300px] w-full flex items-center justify-center cursor-pointer text-center mb-4" onClick={() => setFlipped((value) => !value)}>
           <div>
-            {card.subject && (
-              <Badge color={card.subject.color} className="mb-4">{card.subject.name}</Badge>
-            )}
-            <p className={`text-lg font-medium text-primary mb-2 ${flipped ? '' : ''}`}>
-              {flipped ? card.back : card.front}
-            </p>
-            <p className="text-xs text-tertiary mt-4">{flipped ? 'Click to see front' : 'Click to reveal answer'}</p>
+            {card.subject && <Badge color={card.subject.color} className="mb-4">{card.subject.name}</Badge>}
+            <p className="text-lg font-medium text-primary mb-2">{flipped ? card.back : card.front}</p>
+            <p className="text-xs text-tertiary mt-4">{flipped ? 'Click to see the question' : 'Click to reveal the answer'}</p>
           </div>
-        </div>
-
+        </button>
+        {selectedResult && <p className={`text-sm text-center mb-3 ${selectedResult === 'correct' ? 'text-green-500' : 'text-red-500'}`}>Marked: {selectedResult === 'correct' ? 'Knew it' : "Didn't know it"} · You can change this before finishing.</p>}
         {flipped ? (
-          <div className="flex gap-3 justify-center">
-            <button onClick={() => handleAnswer(false)} className="btn btn-danger !px-8">
-              <X size={18} /> Didn't know
-            </button>
-            <button onClick={() => handleAnswer(true)} className="btn btn-primary !px-8" style={{ backgroundColor: '#22c55e' }}>
-              <Check size={18} /> Knew it
-            </button>
+          <div className="flex flex-wrap gap-3 justify-center mb-5">
+            <button onClick={() => setResults((current) => ({ ...current, [card.id]: 'incorrect' }))} className={`btn !px-6 ${selectedResult === 'incorrect' ? 'btn-danger ring-2 ring-red-400' : 'btn-secondary'}`}><X size={18} /> Didn't know</button>
+            <button onClick={() => setResults((current) => ({ ...current, [card.id]: 'correct' }))} className={`btn !px-6 ${selectedResult === 'correct' ? 'btn-primary ring-2 ring-green-400' : 'btn-secondary'}`}><Check size={18} /> Knew it</button>
           </div>
-        ) : (
-          <div className="flex justify-between">
-            <button onClick={() => { setIndex(Math.max(0, index - 1)); setFlipped(false); }} disabled={index === 0} className="btn btn-secondary disabled:opacity-50">
-              <ChevronLeft size={16} /> Previous
-            </button>
-            <button onClick={() => setFlipped(true)} className="btn btn-primary">Reveal answer</button>
-            <button onClick={() => { setIndex(Math.min(cards.length - 1, index + 1)); setFlipped(false); }} disabled={isLast} className="btn btn-secondary disabled:opacity-50">
-              Next <ChevronRight size={16} />
-            </button>
-          </div>
-        )}
+        ) : <div className="flex justify-center mb-5"><button onClick={() => setFlipped(true)} className="btn btn-primary">Reveal answer</button></div>}
+        <div className="flex items-center justify-between gap-2">
+          <button onClick={() => moveTo(index - 1)} disabled={index === 0} className="btn btn-secondary disabled:opacity-50"><ChevronLeft size={16} /> Previous</button>
+          <button onClick={finish} disabled={saving || answeredCount === 0} className="btn btn-primary disabled:opacity-50">{saving ? 'Saving…' : 'Finish & save'}</button>
+          <button onClick={() => moveTo(index + 1)} disabled={index === cards.length - 1} className="btn btn-secondary disabled:opacity-50">Next <ChevronRight size={16} /></button>
+        </div>
+        {error && <p role="alert" className="text-sm text-red-500 text-center mt-4">{error}</p>}
       </div>
     </div>
   );
