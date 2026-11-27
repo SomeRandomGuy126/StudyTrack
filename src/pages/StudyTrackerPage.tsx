@@ -5,7 +5,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Modal, ConfirmDialog } from '@/components/ui/Modal';
 import { StudyTimer } from '@/components/StudyTimer';
 import { EmptyState, Spinner, ConfidenceDots, Badge } from '@/components/ui/Common';
-import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate } from '@/lib/spacedRepetition';
+import { formatDuration, formatShortDate, formatDate, confidenceLabel, getNextDueDate, getNextAvailableRevisionDate, localDateKey } from '@/lib/spacedRepetition';
 import type { StudySession } from '@/lib/supabase';
 import {
   Clock, List, Table as TableIcon, Calendar as CalIcon, BookOpen,
@@ -470,26 +470,37 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
       return;
     }
 
-    // Create/update revision record for this topic
+    // Create/update revision record for this topic, limiting the queue to two topics per day.
     if (topicId && subjectId) {
       const existingRevision = await supabase
         .from('revisions')
-        .select('*')
+        .select('id')
+        .eq('user_id', userId)
         .eq('topic_id', topicId)
         .eq('status', 'due')
         .maybeSingle();
 
       const topic = topics.find((t) => t.id === topicId);
       const isDifficult = topic?.is_difficult ?? false;
-      const nextDue = getNextDueDate(new Date(studiedDate), 0, confidence, null, isDifficult);
+      const proposedDue = getNextDueDate(new Date(`${studiedDate}T12:00:00`), 0, confidence, null, isDifficult);
+      const { data: queuedRevisions } = await supabase
+        .from('revisions')
+        .select('id,next_due_date')
+        .eq('user_id', userId)
+        .eq('status', 'due');
+      const occupiedDates = (queuedRevisions ?? [])
+        .filter((item) => item.id !== existingRevision.data?.id)
+        .map((item) => item.next_due_date);
+      const scheduledDue = getNextAvailableRevisionDate(proposedDue, occupiedDates, 2);
+      const scheduledDate = localDateKey(scheduledDue);
+      const intervalDays = Math.max(1, Math.round((scheduledDue.getTime() - new Date(`${studiedDate}T12:00:00`).getTime()) / (1000 * 60 * 60 * 24)));
 
       if (existingRevision.data) {
-        // Update: this study session counts as a study, reset revision chain
         await supabase.from('revisions').update({
           last_studied_date: studiedDate,
           confidence,
-          next_due_date: nextDue.toISOString().split('T')[0],
-          interval_days: Math.round((nextDue.getTime() - new Date(studiedDate).getTime()) / (1000 * 60 * 60 * 24)),
+          next_due_date: scheduledDate,
+          interval_days: intervalDays,
         }).eq('id', existingRevision.data.id);
       } else {
         await supabase.from('revisions').insert({
@@ -498,8 +509,8 @@ function StudySessionModal({ session, subjects, topics, userId, onClose, onSaved
           subject_id: subjectId,
           revision_number: 0,
           last_studied_date: studiedDate,
-          next_due_date: nextDue.toISOString().split('T')[0],
-          interval_days: Math.round((nextDue.getTime() - new Date(studiedDate).getTime()) / (1000 * 60 * 60 * 24)),
+          next_due_date: scheduledDate,
+          interval_days: intervalDays,
           confidence,
           status: 'due',
         });
