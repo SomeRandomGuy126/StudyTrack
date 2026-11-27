@@ -28,9 +28,13 @@ function safeNoteHtml(value: string) {
     if (child.nodeType !== Node.ELEMENT_NODE) return '';
     const el = child as HTMLElement;
     if (el.tagName === 'IMG') {
+      const path = el.getAttribute('data-note-image') ?? '';
       const src = el.getAttribute('src') ?? '';
       const alt = el.getAttribute('alt') ?? 'Note image';
-      if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
+      if (/^[a-f0-9-]{36}\\/(?:drafts|[a-f0-9-]{36})\\/[a-z0-9._-]+$/i.test(path)) {
+        return '<img data-note-image="' + escapeAttr(path) + '" alt="' + escapeAttr(alt) + '" />';
+      }
+      if (/^data:image\\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
         return '<img src="' + escapeAttr(src) + '" alt="' + escapeAttr(alt) + '" />';
       }
       return '';
@@ -44,7 +48,10 @@ function safeNoteHtml(value: string) {
       ).join(';');
       const legacyColor = el.getAttribute('color');
       const colorStyle = legacyColor && /^#[0-9a-f]{3,8}$/i.test(legacyColor) && !/color:/i.test(safeStyle) ? 'color:' + legacyColor : '';
-      const style = [safeStyle, colorStyle].filter(Boolean).join(';');
+      const face = el.getAttribute('face');
+      const allowedFonts = ['Arial', 'Georgia', 'Times New Roman', 'Verdana', 'Courier New'];
+      const fontStyle = face && allowedFonts.includes(face) && !/font-family:/i.test(safeStyle) ? 'font-family:' + face : '';
+      const style = [safeStyle, colorStyle, fontStyle].filter(Boolean).join(';');
       return '<span' + (style ? ' style="' + escapeAttr(style) + '"' : '') + '>' + inner + '</span>';
     }
     return '<' + el.tagName.toLowerCase() + '>' + inner + '</' + el.tagName.toLowerCase() + '>';
@@ -207,7 +214,21 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
   const [editorError, setEditorError] = useState('');
 
   useEffect(() => {
-    if (editorRef.current) editorRef.current.innerHTML = safeNoteHtml(note?.content ?? '');
+    let cancelled = false;
+    const loadNoteContent = async () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      editor.innerHTML = safeNoteHtml(note?.content ?? '');
+      const images = Array.from(editor.querySelectorAll<HTMLImageElement>('img[data-note-image]'));
+      await Promise.all(images.map(async (image) => {
+        const path = image.dataset.noteImage;
+        if (!path) return;
+        const { data } = await supabase.storage.from('note-images').createSignedUrl(path, 3600);
+        if (!cancelled && data?.signedUrl) image.src = data.signedUrl;
+      }));
+    };
+    void loadNoteContent();
+    return () => { cancelled = true; };
   }, [note?.id]);
   const [subjectId, setSubjectId] = useState(note?.subject_id ?? '');
   const [topicId, setTopicId] = useState(note?.topic_id ?? '');
@@ -221,23 +242,44 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
     document.execCommand(command, false, value);
   };
 
-  const insertImageFile = (file?: File) => {
+  const insertImageFile = async (file?: File) => {
     if (!file) return;
-    if (!file.type.startsWith('image/') || file.size > 4 * 1024 * 1024) {
-      setEditorError('Choose an image smaller than 4 MB.');
+    if (!['image/png', 'image/jpeg', 'image/gif', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024) {
+      setEditorError('Choose a PNG, JPG, GIF or WebP image smaller than 5 MB.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      const src = String(reader.result ?? '');
-      if (src.startsWith('data:image/')) {
-        editorRef.current?.focus();
-        document.execCommand('insertHTML', false, '<img src="' + src + '" alt="Note image" style="max-width:100%;height:auto" />');
-        setEditorError('');
-      }
-    };
-    reader.onerror = () => setEditorError('Could not read that image file.');
-    reader.readAsDataURL(file);
+    setEditorError('');
+    const extension = file.name.split('.').pop()?.toLowerCase().replace(/[^a-z0-9]/g, '') || 'png';
+    const path = `${userId}/${note?.id ?? 'drafts'}/${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from('note-images').upload(path, file, { upsert: false, contentType: file.type });
+    if (uploadError) {
+      setEditorError('Could not upload image: ' + uploadError.message);
+      return;
+    }
+    const { data: signed, error: signedError } = await supabase.storage.from('note-images').createSignedUrl(path, 3600);
+    if (signedError || !signed?.signedUrl || !editorRef.current) {
+      setEditorError('The image uploaded, but StudyTrack could not display it. Try reopening the note.');
+      return;
+    }
+    const image = document.createElement('img');
+    image.src = signed.signedUrl;
+    image.alt = file.name;
+    image.dataset.noteImage = path;
+    image.style.maxWidth = '100%';
+    image.style.height = 'auto';
+    editorRef.current.focus();
+    const selection = window.getSelection();
+    if (selection?.rangeCount && editorRef.current.contains(selection.anchorNode)) {
+      const range = selection.getRangeAt(0);
+      range.deleteContents();
+      range.insertNode(image);
+      range.setStartAfter(image);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
+    } else {
+      editorRef.current.appendChild(image);
+    }
   };
 
   const handleSave = async () => {
@@ -301,7 +343,7 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('insertUnorderedList')} className="btn-ghost btn !p-1.5" title="Bullet points"><ListIcon size={14} /></button>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => applyFormatting('insertOrderedList')} className="btn-ghost btn !p-1.5 text-xs font-semibold" title="Numbered list">1.</button>
               <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => imageInputRef.current?.click()} className="btn-ghost btn !p-1.5 text-xs" title="Add image">Image</button>
-              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => { insertImageFile(e.target.files?.[0]); e.currentTarget.value = ''; }} />
+              <input ref={imageInputRef} type="file" accept="image/png,image/jpeg,image/gif,image/webp" className="hidden" onChange={(e) => { void insertImageFile(e.target.files?.[0]); e.currentTarget.value = ''; }} />
             </div>
           </div>
           <div
@@ -311,6 +353,14 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
             suppressContentEditableWarning
             className="input min-h-[240px] text-sm leading-6 overflow-y-auto"
             style={{ whiteSpace: 'normal' }}
+            onPaste={(event) => {
+              const item = Array.from(event.clipboardData.items).find((entry) => entry.type.startsWith('image/'));
+              const file = item?.getAsFile();
+              if (file) {
+                event.preventDefault();
+                void insertImageFile(file);
+              }
+            }}
           />
           {editorError && <p role="alert" className="text-sm text-red-500 mt-2">{editorError}</p>}
         </div>
