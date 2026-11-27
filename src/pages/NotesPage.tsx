@@ -9,16 +9,16 @@ import type { Note } from '@/lib/supabase';
 
 function safeNoteHtml(value: string) {
   if (!value) return '';
-  const looksLikeHtml = /<\\/?(h[1-3]|p|div|ul|ol|li|strong|b|em|i|br|span|font|img)\\b/i.test(value);
+  const looksLikeHtml = /<\/?(h[1-3]|p|div|ul|ol|li|strong|b|em|i|br|span|font|img)\b/i.test(value);
   const escaped = value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   const source = looksLikeHtml ? value : escaped
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
     .replace(/^# (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^\\*\\*(.+?)\\*\\*$/gm, '<strong>$1</strong>')
+    .replace(/^\*\*(.+?)\*\*$/gm, '<strong>$1</strong>')
     .replace(/^- (.+)$/gm, '<li>$1</li>')
-    .replace(/((?:<li>.*?<\\/li>\\s*)+)/gs, '<ul>$1</ul>')
-    .replace(/\\n/g, '<br />');
+    .replace(/((?:<li>.*?<\/li>\s*)+)/gs, '<ul>$1</ul>')
+    .replace(/\n/g, '<br />');
   const doc = new DOMParser().parseFromString('<div>' + source + '</div>', 'text/html');
   const allowed = new Set(['H1','H2','H3','P','DIV','UL','OL','LI','STRONG','B','EM','I','BR','SPAN','FONT']);
   const escapeText = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
@@ -30,7 +30,7 @@ function safeNoteHtml(value: string) {
     if (el.tagName === 'IMG') {
       const src = el.getAttribute('src') ?? '';
       const alt = el.getAttribute('alt') ?? 'Note image';
-      if (/^data:image\\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
+      if (/^data:image\/(png|jpeg|gif|webp);base64,/i.test(src) && src.length <= 5500000) {
         return '<img src="' + escapeAttr(src) + '" alt="' + escapeAttr(alt) + '" />';
       }
       return '';
@@ -40,7 +40,7 @@ function safeNoteHtml(value: string) {
     if (el.tagName === 'SPAN' || el.tagName === 'FONT') {
       const rawStyle = el.getAttribute('style') ?? '';
       const safeStyle = rawStyle.split(';').map((part) => part.trim()).filter((part) =>
-        /^(color|background-color|font-family):\\s*(#[0-9a-f]{3,8}|rgba?\\([0-9.,%\\s]+\\)|[a-z0-9 ,'-]+)$/i.test(part)
+        /^(color|background-color|font-family):\s*(#[0-9a-f]{3,8}|rgba?\([0-9.,%\s]+\)|[a-z0-9 ,'-]+)$/i.test(part)
       ).join(';');
       const legacyColor = el.getAttribute('color');
       const colorStyle = legacyColor && /^#[0-9a-f]{3,8}$/i.test(legacyColor) && !/color:/i.test(safeStyle) ? 'color:' + legacyColor : '';
@@ -314,7 +314,7 @@ function NoteModal({ note, subjects, topics, userId, onClose, onSaved }: {
           />
           {editorError && <p role="alert" className="text-sm text-red-500 mt-2">{editorError}</p>}
         </div>
-        <div className="flex gap-3 justify-end pt-2>
+        <div className="flex gap-3 justify-end pt-2">
           <button onClick={onClose} className="btn btn-secondary">Cancel</button>
           <button onClick={handleSave} disabled={saving || !title.trim()} className="btn btn-primary disabled:opacity-50">
             {saving ? 'Saving...' : 'Save note'}
